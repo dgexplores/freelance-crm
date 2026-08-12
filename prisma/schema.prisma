@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DealStage {
+  INBOX
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum EmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  rateCard  String? // markdown: rates, services, terms
+  createdAt DateTime @default(now())
+  contacts  Contact[]
+  deals     Deal[]
+  emails    Email[]
+  facts     Fact[]
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  email       String
+  name        String?
+  company     String?
+  linkedinUrl String?
+  source      String? // how they arrived: inbound, referral, outbound
+  lastContact DateTime?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  deals       Deal[]
+  emails      Email[]
+  facts       Fact[]
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, email])
+}
+
+model Deal {
+  id           String    @id @default(cuid())
+  title        String
+  stage        DealStage @default(INBOX)
+  value        Int? // in dollars, estimated
+  whyInPipeline String?  // evidence: the email/context that put it here
+  source       String?
+  wonAt        DateTime?
+  lostReason   String?
+  contactId    String
+  contact      Contact   @relation(fields: [contactId], references: [id])
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  tasks        Task[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Email {
+  id        String         @id @default(cuid())
+  gmailId   String?
+  threadId  String?
+  subject   String
+  fromAddr  String
+  body      String
+  direction EmailDirection
+  receivedAt DateTime
+  sentiment String? // AI: positive, neutral, negative
+  action    String? // AI: what it means for the pipeline
+  contactId String?
+  contact   Contact?       @relation(fields: [contactId], references: [id])
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+
+  @@unique([userId, gmailId])
+}
+
+model Task {
+  id        String   @id @default(cuid())
+  kind      String // follow_up, brief, proposal
+  dueAt     DateTime
+  reason    String // why the agent scheduled it
+  done      Boolean  @default(false)
+  doneAt    DateTime?
+  dealId    String
+  deal      Deal     @relation(fields: [dealId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Fact {
+  id        String   @id @default(cuid())
+  claim     String
+  source    String // signature-block, email, linkedin, web
+  strength  String // strong, suggestion — never guessed
+  applied   Boolean  @default(false) // written into the record or not
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
