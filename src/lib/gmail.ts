@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
+const CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] ?? "";
+const CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
 
 export type ImportedMessage = {
   gmailId: string;

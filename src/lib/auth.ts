@@ -4,13 +4,15 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@/lib/prisma";
 
-const googleClientId = process.env.GOOGLE_CLIENT_ID ?? "";
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
+const googleClientId = process.env["GOOGLE_CLIENT_ID"] ?? "";
+const googleClientSecret = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
+const betterAuthUrl = process.env["BETTER_AUTH_URL"];
+const betterAuthSecret = process.env["BETTER_AUTH_SECRET"];
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
-  baseURL: process.env.BETTER_AUTH_URL,
-  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: betterAuthUrl,
+  secret: betterAuthSecret,
   socialProviders: {
     google: {
       clientId: googleClientId,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { getUser } from "@/lib/session";
 import { importGmail } from "@/lib/pipeline";
 
 export const DEAL_STAGES = ["INBOX", "QUALIFIED", "PROPOSAL", "WON", "LOST"] as const;
@@ -14,9 +14,10 @@ export type ActionResult = {
 };
 
 export async function importGmailAction(): Promise<ActionResult> {
-  const session = await requireUser();
+  const user = await getUser();
+  if (!user) return { ok: false, message: "Not authenticated." };
   try {
-    const result = await importGmail(session.user.id);
+    const result = await importGmail(user.id);
     revalidatePath("/board");
     const summary = [
       result.fetched > 0 ? `${result.fetched} fetched` : null,
@@ -27,16 +28,13 @@ export async function importGmailAction(): Promise<ActionResult> {
     ]
       .filter(Boolean)
       .join(", ");
-    const detail = result.errors.length
-      ? ` (${result.errors.length} errors)`
-      : "";
+    const detail = result.errors.length ? ` (${result.errors.length} errors)` : "";
     return {
       ok: true,
       message: `Import done: ${summary}${detail}`,
     };
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Gmail import failed.";
+    const message = err instanceof Error ? err.message : "Gmail import failed.";
     return { ok: false, message };
   }
 }
@@ -45,12 +43,13 @@ export async function moveDealAction(
   dealId: string,
   toStage: string,
 ): Promise<ActionResult> {
-  const session = await requireUser();
+  const user = await getUser();
+  if (!user) return { ok: false, message: "Not authenticated." };
   if (!DEAL_STAGES.includes(toStage as DealStageValue)) {
     return { ok: false, message: "Invalid stage." };
   }
   const deal = await prisma.deal.findFirst({
-    where: { id: dealId, userId: session.user.id },
+    where: { id: dealId, userId: user.id },
   });
   if (!deal) {
     return { ok: false, message: "Deal not found." };

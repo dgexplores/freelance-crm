@@ -1,15 +1,17 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { getUser } from "@/lib/session";
 import { BoardClient } from "@/app/board/board-client";
+import { listStaleDeals } from "@/lib/ai/nudge";
 
 export const metadata = { title: "Pipeline | Inbox CRM" };
 
 export default async function BoardPage() {
-  const session = await requireUser();
+  const user = await getUser();
+  if (!user) return null; // middleware handles redirect
 
-  const [deals, user, factCount] = await Promise.all([
+  const [deals, userData, factCount, staleDeals] = await Promise.all([
     prisma.deal.findMany({
-      where: { userId: session.user.id },
+      where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,
@@ -36,14 +38,15 @@ export default async function BoardPage() {
       },
     }),
     prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: user.id },
       select: {
         email: true,
         name: true,
         gmailSyncStartedAt: true,
       },
     }),
-    prisma.fact.count({ where: { userId: session.user.id } }),
+    prisma.fact.count({ where: { userId: user.id } }),
+    listStaleDeals(5),
   ]);
 
   const serializable = deals.map((deal) => ({
@@ -71,10 +74,11 @@ export default async function BoardPage() {
 
   return (
     <BoardClient
-      userEmail={user?.email ?? ""}
-      gmailSyncStartedAt={user?.gmailSyncStartedAt?.toISOString() ?? null}
+      userEmail={userData?.email ?? ""}
+      gmailSyncStartedAt={userData?.gmailSyncStartedAt?.toISOString() ?? null}
       factCount={factCount}
       deals={serializable}
+      staleCount={staleDeals.length}
     />
   );
 }

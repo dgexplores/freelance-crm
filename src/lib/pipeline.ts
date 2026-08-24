@@ -7,6 +7,7 @@ import {
   type ImportedMessage,
   type ImportResult,
 } from "@/lib/gmail";
+import { logger } from "@/lib/logger";
 
 export type PipelineResult = {
   imported: number;
@@ -29,7 +30,7 @@ export type ParsedSender = {
 export function parseFrom(header: string): ParsedSender {
   if (!header) return { email: null, name: null };
   const angleMatch = header.match(/^"?([^"<]*)"?\s*<([^>]+)>/);
-  if (angleMatch) {
+  if (angleMatch && angleMatch[1] !== undefined && angleMatch[2] !== undefined) {
     return {
       name: angleMatch[1].trim() || null,
       email: angleMatch[2].trim().toLowerCase(),
@@ -40,7 +41,7 @@ export function parseFrom(header: string): ParsedSender {
   return { email: null, name: null };
 }
 
-function truncate(value: string, max: number): string {
+export function truncate(value: string, max: number): string {
   const trimmed = value.trim();
   return trimmed.length > max ? `${trimmed.slice(0, max - 3)}...` : trimmed;
 }
@@ -152,7 +153,11 @@ export async function importGmail(
 ): Promise<ImportResult & PipelineResult> {
   const ctx = await getImportContext(userId);
 
+  logger.info("Starting Gmail import", { userId, firstRun: ctx.firstRun, sinceMs: ctx.sinceMs });
+
   const messages = await fetchNewMessages(userId, ctx.sinceMs);
+
+  logger.info("Fetched messages from Gmail", { userId, count: messages.length });
 
   const pipeline = await runPipeline(userId, messages);
 
@@ -163,18 +168,16 @@ export async function importGmail(
 
   if (pipeline.errors.length === 0) {
     await recordForwardOnlyBoundary(userId);
+    logger.info("Gmail import completed successfully", { userId, ...pipeline });
+  } else {
+    logger.warn("Gmail import completed with errors", { userId, ...pipeline });
   }
 
   return {
     boundary: boundary?.gmailSyncStartedAt ?? null,
     firstRun: ctx.firstRun,
     fetched: messages.length,
-    imported: pipeline.imported,
-    skipped: pipeline.skipped,
-    contacts: pipeline.contacts,
-    deals: pipeline.deals,
-    facts: pipeline.facts,
-    errors: pipeline.errors,
+    ...pipeline,
   };
 }
 /**
@@ -228,6 +231,7 @@ export async function runPipeline(
           },
         });
         result.contacts += 1;
+        logger.debug("Created new contact", { userId, contactId: contact.id, email: senderEmail });
       } else {
         contact = await prisma.contact.update({
           where: { id: contact.id },
@@ -269,6 +273,7 @@ export async function runPipeline(
           },
         });
         result.deals += 1;
+        logger.debug("Created new deal", { userId, dealId: "new", contactId: contact.id });
       } else if (existingDeal.stage === "INBOX") {
         // Keep the evidence fresh but only while the deal is still INBOX;
         // a manually-moved deal keeps its reason.
@@ -285,13 +290,14 @@ export async function runPipeline(
       if (facts.length > 0) {
         await prisma.fact.createMany({ data: facts });
         result.facts += facts.length;
+        logger.debug("Created facts", { userId, contactId: contact.id, factCount: facts.length });
       }
 
       result.imported += 1;
     } catch (err) {
-      result.errors.push(
-        `Message ${msg.gmailId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const errorMsg = `Message ${msg.gmailId}: ${err instanceof Error ? err.message : String(err)}`;
+      result.errors.push(errorMsg);
+      logger.error("Failed to process message", { userId, gmailId: msg.gmailId, error: errorMsg });
     }
   }
 

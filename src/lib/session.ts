@@ -1,7 +1,6 @@
 import "server-only";
 import { cache } from "react";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
 export const getSession = cache(async () => {
@@ -9,13 +8,10 @@ export const getSession = cache(async () => {
 });
 
 /**
- * Guards a route: redirects to /sign-in when there is no session.
- * Returns the session (with user) for authorized callers.
+ * Returns the session user or null if not authenticated.
+ * Use with middleware for protected routes.
  */
-export async function requireUser() {
+export async function getUser() {
   const session = await getSession();
-  if (!session?.user) {
-    redirect("/sign-in");
-  }
-  return session;
+  return session?.user ?? null;
 }

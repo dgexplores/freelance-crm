@@ -14,7 +14,7 @@ export class AiUnavailableError extends Error {
 }
 
 export function geminiConfigured(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY);
+  return Boolean(process.env["GEMINI_API_KEY"]);
 }
 
 export interface GenerateTextOptions {
@@ -32,7 +32,7 @@ export async function generateText(
   prompt: string,
   options: GenerateTextOptions = {},
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env["GEMINI_API_KEY"];
   if (!apiKey) throw new AiUnavailableError();
 
   const model = options.model ?? DEFAULT_GEMINI_MODEL;
