@@ -2,50 +2,130 @@
 
 *Your deals manage themselves.*
 
-## What it is
+---
 
-Freelance CRM is a pipeline CRM built for one person: a freelancer or consultant running their own practice. It connects to your Gmail, reads your conversations, and turns them into a deal board you never have to type into. Leads appear in your pipeline with the reason why. Before a call, you get a brief. After a call, the follow-up reminder writes itself. You do the work in your inbox; the CRM does everything around it.
+## TL;DR
 
-## Why it exists
+A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (read-only), turns inbound threads into a deal board with evidence, and writes your pre-call briefs, proposals, and follow-ups from your rate card. Zero data entry. No guessing.
 
-CRMs were built for sales teams and push that machinery onto solo operators: fields to fill, tables to keep, dashboards to interpret. Freelancers do not have a "pipeline" problem, they have a *too busy selling to log anything* problem. So the record keeping here is a side effect of doing business, not a chore in front of it.
+---
 
-The other design rule comes from the failures of AI CRMs: nothing about a person is guessed. Every fact recorded carries its source (your email, a signature block) and a strength (strong or suggestion). A confidently wrong fact about a prospect is worse than a blank field, because nobody can tell it wrong. Strong evidence writes to the record, weak evidence becomes a suggestion you settle in seconds.
+## Who This Is For
 
-## What it does
+| You | This Helps You |
+|-----|----------------|
+| **Solo consultant/freelancer** selling expertise (dev, design, strategy, writing, etc.) | Stop copying emails into Notion/Sheets. Pipeline builds itself. |
+| **Too busy selling to log anything** | CRM is a side effect of email, not a chore before it. |
+| **Wants trustworthy records** | Every fact is sourced (email, signature block) and graded (strong/suggestion). No hallucinations. |
+| **Sends proposals manually** | Rate card + thread context → professional draft in seconds. |
+| **Lets deals go cold** | Auto-schedules follow-ups with reasons. Nothing falls through. |
+| **Self-hosts or deploys to Vercel** | Lean stack: Next.js + Postgres + one LLM. Cheap to run. |
 
-| Feature | Description |
-|---|---|
-| Auto pipeline from inbox | Every inbound thread is read and either placed in a stage or left alone, always with the email that put it there |
-| Zero data entry | Contacts, deals, and context come from your own mail, not from forms |
-| Pre-call briefs | One glance before every call: who they are, what they last said, where the deal stands |
-| Proposal drafts | Pick an open deal, get a draft written from your rate card (services, rates, terms) |
-| Follow-up nudges | Each reminder carries the reason it exists, so you decide whether it still matters |
-| Evidence ledger | Every claim on a record is sourced and graded, strong or suggestion, never guessed |
-| The deal board | Pipeline: INBOX → QUALIFIED → PROPOSAL → WON / LOST, with the story visible on each card |
-| Rate card management | Markdown-based rate card powers all AI features |
-| Task scheduling | Auto-schedule follow-ups for stale deals |
-| Gmail sync | Forward-only, read-only import with boundary tracking |
+**Not for:** Sales teams, multi-user CRMs, lead enrichment from LinkedIn/web, complex forecasting dashboards.
 
-## Effectiveness
+---
 
-What this buys the one person running a practice:
+## How It Works (The Loop)
 
-- **No data entry**: the pipeline is a byproduct of email, so it stays current without discipline. Three weeks of silence on a deal shows up because the system noticed, not because you remembered.
-- **Faster proposals**: brief and draft are generated from what you already wrote, so a proposal goes out the same day the call happens.
-- **Nothing falls through**: follow-ups are scheduled with reasons and evidence, and the system tells you why every reminder exists.
-- **Trustworthy records**: sourced and graded facts, so you never act on a hallucinated detail.
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Inbound    │────▶│  Auto-      │────▶│  Deal Board │────▶│  Pre-Call   │────▶│  Proposal   │
+│  Email      │     │  Pipeline   │     │  (Kanban)   │     │  Brief      │     │  Draft      │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+       │                   │                   │                   │                   │
+       ▼                   ▼                   ▼                   ▼                   ▼
+  Read-only          Evidence on         Drag cards          AI: who they      AI: scope +
+  Gmail API          every card          between stages      are, what they    fees from rate
+  (gmail.readonly)   (whyInPipeline)     (INBOX→WON)         said, what to     card only
+  Forward-only       Strong/suggestion   Stale badges        confirm           Never invents
+  boundary           facts only                                                        prices
+                                                                                      │
+                                                                                      ▼
+                                                                              ┌─────────────┐
+                                                                              │  Follow-Up  │
+                                                                              │  Nudge      │
+                                                                              └─────────────┘
+                                                                                     │
+                                                                                     ▼
+                                                                              Auto-scheduled for
+                                                                              stale deals (≥5d)
+```
+
+---
+
+## Core Features
+
+### 1. Pipeline Board (`/board`)
+- **5 stages:** INBOX → QUALIFIED → PROPOSAL → WON / LOST
+- **Evidence on every card** — `whyInPipeline` shows the exact email that created the deal
+- **Move with one click** — Forward/back buttons, Won/Lost from PROPOSAL, Reopen from closed
+- **Stale indicator** — Amber badge shows deals idle ≥5 days in INBOX/QUALIFIED
+- **Gmail Import button** — Forward-only, read-only sync (never touches old mail)
+
+### 2. Deal Detail (`/board/[dealId]`)
+Four tabs:
+| Tab | What You See |
+|-----|--------------|
+| **Overview** | Deal metadata, evidence, AI actions (Brief, Proposal, Nudge) |
+| **Emails** | Full thread history (newest first), open in Gmail link |
+| **Facts** | Evidence ledger: claim + source + strength (strong/suggestion) + applied |
+| **Tasks** | Scheduled follow-ups, briefs, proposals with due dates |
+
+### 3. AI Actions (Powered by Your Rate Card)
+| Action | When | Output |
+|--------|------|--------|
+| **Pre-Call Brief** | Any deal, before a call | Who they are, what they last said, where deal stands, what to confirm, talking points |
+| **Proposal Draft** | PROPOSAL-stage deals | Scope, fees (from rate card only), terms, next steps — never invents prices |
+| **Follow-Up Nudge** | Stale INBOX/QUALIFIED deals | Short, human re-engagement email referencing thread context |
+
+**All AI outputs:** Copy-to-clipboard, markdown, editable before sending.
+
+### 4. Rate Card (`/settings`)
+Markdown editor with default template:
+```markdown
+## Services
+| Service | Rate | Unit |
+|---------|------|------|
+| Strategy / Discovery | $250 | hour |
+| Frontend Development | $180 | hour |
+
+## Terms
+- Minimum engagement: 20 hours
+- Payment: Net 15, 50% upfront
+- Scope changes: Billed at hourly rate
+```
+Powers **all AI features** — briefs reference your services, proposals pull fees verbatim.
+
+### 5. Evidence Ledger (Facts)
+Every claim extracted from emails:
+- **Claim** — Literal statement from email
+- **Source** — `email`, `signature-block`, `linkedin`, `web`
+- **Strength** — `strong` (directly stated) or `suggestion` (keyword heuristic)
+- **Applied** — Whether written into contact/deal record
+
+*No guessing. Confidently wrong facts are worse than blank fields.*
+
+### 6. Gmail Sync
+- **Read-only** (`gmail.readonly` scope) — never sends, moves, archives, deletes
+- **Forward-only** — First import reads ≤24h back, then records boundary; older mail never imported
+- **Per-user boundary** — Stored on `User.gmailSyncStartedAt`, only advances on successful import
+- **Deduplication** — One contact per (user, email); one deal per contact
+
+### 7. Task Scheduling + Cron
+- **Manual:** Create follow-up/brief/proposal tasks from deal detail
+- **Automatic:** `GET /api/cron/stale-followups` (daily cron) schedules follow-ups for deals idle ≥5 days
+- **Each task carries a reason** — You decide if it still matters
+
+---
 
 ## Quick Start
 
 ### Prerequisites
-
 - Node.js 22+
 - Docker (for local PostgreSQL)
 - Google Cloud project with Gmail API enabled
 
 ### Local Development
-
 ```bash
 # Clone and install
 git clone git@github.com:dgexplores/freelance-crm.git
@@ -57,7 +137,7 @@ docker compose up -d
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with your credentials (see below)
 
 # Initialize database
 npm run db:generate
@@ -66,120 +146,40 @@ npm run db:push
 # Run development server
 npm run dev
 ```
-
 App runs at `http://localhost:3000`
 
-### Environment Variables
+### Required Environment Variables (Local)
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | `postgresql://freelance:freelance@localhost:5432/freelance` (default) |
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | `http://localhost:3000` |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `BETTER_AUTH_SECRET` | Yes | `openssl rand -base64 32` |
-| `BETTER_AUTH_URL` | Yes | App URL (e.g., `http://localhost:3000`) |
-| `GOOGLE_CLIENT_ID` | OAuth | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | OAuth | Google OAuth client secret |
-| `GEMINI_API_KEY` | AI features | Google AI Studio API key |
-| `CRON_SECRET` | Scheduled jobs | `openssl rand -base64 32` |
+### Optional (for AI features)
+| Variable | Purpose |
+|----------|---------|
+| `GEMINI_API_KEY` | Google AI Studio key for briefs/proposals/nudges |
+| `CRON_SECRET` | `openssl rand -base64 32` (for scheduled follow-ups) |
 
-See [SETUP.md](./SETUP.md) for detailed setup including Google OAuth configuration.
+See [SETUP.md](./SETUP.md) for Google OAuth setup details.
 
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router, Turbopack) |
-| Language | TypeScript (strict mode) |
-| Database | PostgreSQL 17 + Prisma ORM |
-| Auth | Better Auth (Google OAuth) |
-| Email | Gmail API (read-only, `gmail.readonly` scope) |
-| AI | Google Gemini (briefs, proposals, nudges) |
-| Styling | Tailwind CSS v4 |
-| Testing | Vitest + React Testing Library |
-| CI/CD | GitHub Actions → Vercel |
-
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── api/
-│   │   ├── ai/           # AI endpoints (brief, proposal, nudge)
-│   │   ├── auth/         # Better Auth endpoints
-│   │   └── cron/         # Scheduled jobs
-│   ├── board/            # Pipeline board + deal detail
-│   ├── settings/         # Rate card & account settings
-│   └── sign-in/          # Auth page
-├── components/           # Shared UI components
-├── lib/
-│   ├── ai/               # AI prompts & generation
-│   ├── auth.ts           # Better Auth config
-│   ├── gmail.ts          # Gmail API client
-│   ├── pipeline.ts       # Import & staging logic
-│   ├── logger.ts         # Structured logging
-│   └── prisma.ts         # Prisma client singleton
-└── middleware.ts         # Auth protection
-```
-
-## Data Model
-
-- **User** — one person, their rate card (markdown: rates, services, terms)
-- **Contact** — a person, deduped by email per user
-- **Deal** — pipeline entry with stage + `whyInPipeline` evidence
-- **Email** — imported Gmail threads, AI-tagged with sentiment + pipeline action
-- **Task** — AI-scheduled follow-ups, briefs, proposals, each with a reason
-- **Fact** — evidence ledger: claims carry source + strength (strong/suggestion), never guessed
-
-## Pipeline Stages
-
-```
-INBOX → QUALIFIED → PROPOSAL → WON / LOST
-```
-
-- **INBOX**: New inbound contact, auto-created from email
-- **QUALIFIED**: Real opportunity, worth pursuing
-- **PROPOSAL**: Proposal sent, awaiting response
-- **WON**: Closed won
-- **LOST**: Closed lost (with reason)
-
-## AI Features
-
-### Pre-Call Brief
-Generates a concise brief from the deal context, contact history, and your rate card. Sections: Who they are, What they last said, Where the deal stands, What to confirm, Suggested talking points.
-
-### Proposal Draft
-Writes a professional proposal from your rate card and the email thread. Only uses services/rates/terms that exist on your rate card — never invents prices.
-
-### Follow-Up Nudge
-Drafts a short, human re-engagement email for deals that have gone stale (5+ days in INBOX/QUALIFIED). References specific thread context, asks a single low-friction question.
-
-### Evidence Ledger
-Every fact extracted from emails is stored with:
-- **Claim**: The literal statement
-- **Source**: `email`, `signature-block`, `linkedin`, `web`
-- **Strength**: `strong` (directly stated) or `suggestion` (keyword heuristic)
-- **Applied**: Whether it's written into the contact/deal record
-
-## Scheduled Jobs
-
-`GET /api/cron/stale-followups` — Runs daily to schedule follow-up tasks for deals idle ≥5 days in INBOX/QUALIFIED. Requires `CRON_SECRET` in Authorization header.
-
-Deploy with Vercel Cron or any scheduler (cron, GitHub Actions, etc.).
+---
 
 ## Production Deployment
 
 ### Vercel + Neon (Recommended)
-
 1. Create Neon project, copy connection string
 2. `DATABASE_URL="<neon>" npm run db:push`
 3. Import repo to Vercel
-4. Add all environment variables (see below)
-5. Add production redirect URI to Google OAuth
+4. Add **all** environment variables (see below)
+5. Add production redirect URI to Google OAuth: `https://your-domain.com/api/auth/callback/google`
 6. Deploy
 
 ### Required Production Environment Variables
-
 | Variable | Required | Description |
-|---|---|---|
+|----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string (Neon, Supabase, etc.) |
 | `BETTER_AUTH_SECRET` | Yes | `openssl rand -base64 32` |
 | `BETTER_AUTH_URL` | Yes | Production URL (e.g., `https://your-domain.com`) |
@@ -187,80 +187,51 @@ Deploy with Vercel Cron or any scheduler (cron, GitHub Actions, etc.).
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `CRON_SECRET` | Yes | `openssl rand -base64 32` (for `/api/cron/stale-followups`) |
 
-### Recommended Production Environment Variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | AI features | Google AI Studio API key |
-| `STRIPE_SECRET_KEY` | Billing | Stripe secret key (when implemented) |
-| `SENTRY_DSN` | Error tracking | Sentry DSN for error monitoring |
-| `SENTRY_ORG` | Error tracking | Sentry organization slug |
-| `SENTRY_PROJECT` | Error tracking | Sentry project slug |
-| `SENTRY_AUTH_TOKEN` | Error tracking | Sentry auth token for source maps |
-| `SENTRY_ENVIRONMENT` | Error tracking | `production` (auto-set on Vercel) |
+### Recommended Production Variables
+| Variable | Purpose |
+|----------|---------|
+| `GEMINI_API_KEY` | AI features (briefs, proposals, nudges) |
+| `STRIPE_SECRET_KEY` | Billing (when implemented) |
+| `SENTRY_DSN` | Error monitoring |
+| `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Sentry source map upload |
+| `SENTRY_ENVIRONMENT` | `production` (auto-set on Vercel) |
 
 ### Database Backups
-
 Automated daily backups via cron:
-
 ```bash
 # Add to crontab (runs daily at 2 AM)
 0 2 * * * /path/to/scripts/backup-db.sh
 ```
-
-Required backup env vars:
-- `BACKUP_DIR` — Backup directory (default: `/var/backups/freelance-crm`)
-- `RETENTION_DAYS` — Days to retain backups (default: 30)
-- `DATABASE_URL` — Must be set
-
-Backup script creates compressed PostgreSQL custom-format dumps with verification and automatic cleanup.
+Required: `BACKUP_DIR`, `RETENTION_DAYS`, `DATABASE_URL`
 
 ### Pre-Deployment Checklist
-
-Run before every production deploy:
-
 ```bash
 npm run predeploy
 ```
-
-This runs: typecheck → lint → tests → build → database connectivity → migration status check.
+Runs: typecheck → lint → tests → build → DB connectivity → migration status
 
 ### Health Checks
-
-- `GET /api/health` — Returns `{ database: true, timestamp, version }` (200 if healthy, 503 if DB down)
-- Use with Vercel Health Checks, UptimeRobot, or your monitoring tool
+- `GET /api/health` → `{ database: true, timestamp, version }` (200/503)
+- Use with Vercel Health Checks, UptimeRobot, etc.
 
 ### Error Monitoring (Sentry)
-
 1. Create Sentry project (Next.js)
-2. Add `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` to Vercel env
-3. Source maps auto-uploaded on deploy
+2. Add Sentry env vars to Vercel
+3. Source maps auto-upload on deploy
 4. Errors captured with user context, release tracking, session replay
 
-### Docker Production
-
-```dockerfile
-# Build
-docker build -t freelance-crm .
-
-# Run
-docker run -d \
-  --name freelance-crm \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -e DATABASE_URL="postgresql://..." \
-  -e BETTER_AUTH_SECRET="..." \
-  -e BETTER_AUTH_URL="https://your-domain.com" \
-  -e GOOGLE_CLIENT_ID="..." \
-  -e GOOGLE_CLIENT_SECRET="..." \
-  -e CRON_SECRET="..." \
-  -e GEMINI_API_KEY="..." \
-  -e SENTRY_DSN="..." \
-  freelance-crm
+### Vercel Cron for Stale Follow-ups
+In `vercel.json`:
+```json
+{
+  "crons": [
+    { "path": "/api/cron/stale-followups", "schedule": "0 9 * * *" }
+  ]
+}
 ```
+Or external cron with `Authorization: Bearer ${CRON_SECRET}` header.
 
-With docker-compose for production:
-
+### Docker Production
 ```yaml
 # docker-compose.prod.yml
 services:
@@ -274,14 +245,12 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - CRON_SECRET=${CRON_SECRET}
-    depends_on:
-      - db
+    depends_on: [db]
     restart: unless-stopped
 
   db:
     image: postgres:17-alpine
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    volumes: [pgdata:/var/lib/postgresql/data]
     environment:
       POSTGRES_USER: freelance
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -292,32 +261,7 @@ volumes:
   pgdata:
 ```
 
-### Vercel Cron for Stale Follow-ups
-
-In `vercel.json`:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/stale-followups",
-      "schedule": "0 9 * * *"
-    }
-  ]
-}
-```
-
-Or use GitHub Actions / external cron with `Authorization: Bearer ${CRON_SECRET}` header.
-
-### Monitoring Checklist
-
-- [ ] `/api/health` returning 200
-- [ ] Sentry receiving test error (`throw new Error("test")` in dev)
-- [ ] Daily backup running and verified
-- [ ] Vercel Cron executing `/api/cron/stale-followups` daily
-- [ ] Google OAuth redirect URI matches production domain
-- [ ] Rate card configured in Settings
-- [ ] Gmail import working (check `/board` after first import)
+---
 
 ## Commands
 
@@ -326,8 +270,8 @@ npm run dev          # Development server
 npm run build        # Production build
 npm run start        # Production server
 npm run lint         # ESLint
-npm run typecheck    # TypeScript check
-npm run test         # Unit tests
+npm run typecheck    # TypeScript strict check
+npm run test         # Unit tests (24 tests)
 npm run test:watch   # Watch mode
 npm run db:push      # Push schema to DB
 npm run db:generate  # Generate Prisma client
@@ -336,32 +280,108 @@ npm run predeploy    # Full pre-deployment validation
 npm run backup:db    # Database backup (production)
 ```
 
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16 (App Router, Turbopack, React 19) |
+| Language | TypeScript (strict: `noUncheckedIndexedAccess`, `noImplicitOverride`, `noPropertyAccessFromIndexSignature`) |
+| Database | PostgreSQL 17 + Prisma ORM |
+| Auth | Better Auth (Google OAuth, `gmail.readonly` scope) |
+| Email | Gmail API (read-only, forward-only) |
+| AI | Google Gemini (briefs, proposals, nudges) |
+| Styling | Tailwind CSS v4 |
+| Testing | Vitest + React Testing Library |
+| Error Tracking | Sentry (client/server/edge + instrumentation) |
+| CI/CD | GitHub Actions → Vercel (lint, typecheck, test, build, deploy) |
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── ai/           # AI endpoints (brief, proposal, nudge, stale)
+│   │   ├── auth/         # Better Auth endpoints
+│   │   ├── cron/         # Scheduled jobs (stale follow-ups)
+│   │   └── health/       # Health check endpoint
+│   ├── board/            # Pipeline board + deal detail
+│   ├── settings/         # Rate card & account settings
+│   └── sign-in/          # Auth page
+├── components/           # Nav, skeletons, error boundaries
+├── lib/
+│   ├── ai/               # AI prompts & generation (brief, proposal, nudge, context)
+│   ├── auth.ts           # Better Auth config
+│   ├── gmail.ts          # Gmail API client (read-only, forward-only)
+│   ├── pipeline.ts       # Import & staging logic (dedupe, evidence, facts)
+│   ├── logger.ts         # Structured JSON logging
+│   ├── prisma.ts         # Prisma client singleton
+│   └── session.ts        # Server session helpers
+└── middleware.ts         # Auth protection for /board, /settings
+```
+
+---
+
+## Data Model
+
+| Model | Purpose |
+|-------|---------|
+| **User** | One person, rate card (markdown), Gmail sync boundary |
+| **Contact** | Person, deduped by email per user, last contact timestamp |
+| **Deal** | Pipeline entry: stage + `whyInPipeline` evidence + value |
+| **Email** | Imported Gmail threads, direction, sentiment, action tags |
+| **Task** | AI-scheduled: follow_up, brief, proposal with reason + due date |
+| **Fact** | Evidence ledger: claim + source + strength (strong/suggestion) + applied |
+
+---
+
+## Pipeline Stages
+
+```
+INBOX → QUALIFIED → PROPOSAL → WON / LOST
+```
+
+- **INBOX** — New inbound contact, auto-created from email
+- **QUALIFIED** — Real opportunity, worth pursuing
+- **PROPOSAL** — Proposal sent, awaiting response
+- **WON** — Closed won
+- **LOST** — Closed lost (with reason)
+
+---
+
 ## Roadmap
 
-1. ✅ Gmail OAuth + mailbox import (forward-only)
-2. ✅ Deal board auto-populated from email signals
-3. ✅ AI: pre-call brief, follow-up nudge, proposal draft
-4. ✅ Rate card management, task scheduling
-5. 🔄 Stripe billing, subscription management
-6. 🔄 Email thread view with inline actions
-7. 🔄 Contact enrichment from signature blocks
-8. 🔄 Mobile-responsive improvements
+- [x] Gmail OAuth + mailbox import (forward-only)
+- [x] Deal board auto-populated from email signals
+- [x] AI: pre-call brief, follow-up nudge, proposal draft
+- [x] Rate card management, task scheduling
+- [ ] Stripe billing, subscription management
+- [ ] Email thread view with inline actions
+- [ ] Contact enrichment from signature blocks
+- [ ] Mobile-responsive improvements
+- [ ] Webhook support for real-time Gmail push
 
-## Where it stands vs Comp AI CRM
+---
 
-Built deliberately against the grain of Comp AI CRM (trycompai/crm).
+## vs. Comp AI CRM (trycompai/crm)
 
 | | Comp AI CRM | freelance-crm |
 |---|---|---|
-| Persona | B2B sales **teams** | **One freelancer/consultant** |
-| Scope | Horizontal: contacts/companies/deals | Vertical: freelancer workflow only |
-| AI | Research engine: enrich, web, LinkedIn, budgets | Sales execution loop: mail → pipeline → brief → proposal → nudge |
-| UX | Dashboard-centric, Agent tab per record | Inbox-centric: lives in the email thread, zero data entry |
-| Evidence | Strong/suggestion ledger from data vendors | Same rule, but source = your own email and signature blocks |
-| Ops | Vercel AI Gateway, Perplexity, RapidAPI, sandbox | Lean: Gmail OAuth + one LLM. Cheap to run anywhere |
-| Business | Open source, self-host | Self-serve, Stripe, built for paying solo users |
+| **Persona** | B2B sales **teams** | **One freelancer/consultant** |
+| **Scope** | Horizontal: contacts/companies/deals | Vertical: freelancer workflow only |
+| **AI** | Research engine: enrich, web, LinkedIn, budgets | Sales execution: mail → pipeline → brief → proposal → nudge |
+| **UX** | Dashboard-centric, Agent tab per record | Inbox-centric: lives in email thread, zero data entry |
+| **Evidence** | Strong/suggestion from data vendors | Same rule, source = your email + signature blocks |
+| **Ops** | Vercel AI Gateway, Perplexity, RapidAPI, sandbox | Lean: Gmail OAuth + one LLM. Cheap to run anywhere |
+| **Business** | Open source, self-host | Self-serve, Stripe, built for paying solo users |
 
-Same bones, different muscle: the no-guess-facts rule stays, the research engine goes, and the closed inbox → deal loop is the product.
+*Same bones, different muscle: the no-guess-facts rule stays, the research engine goes, and the closed inbox → deal loop is the product.*
+
+---
 
 ## License
 
