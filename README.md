@@ -172,25 +172,152 @@ Deploy with Vercel Cron or any scheduler (cron, GitHub Actions, etc.).
 1. Create Neon project, copy connection string
 2. `DATABASE_URL="<neon>" npm run db:push`
 3. Import repo to Vercel
-4. Add all environment variables
+4. Add all environment variables (see below)
 5. Add production redirect URI to Google OAuth
 6. Deploy
 
-### Docker
+### Required Production Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Neon, Supabase, etc.) |
+| `BETTER_AUTH_SECRET` | Yes | `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | Yes | Production URL (e.g., `https://your-domain.com`) |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
+| `CRON_SECRET` | Yes | `openssl rand -base64 32` (for `/api/cron/stale-followups`) |
+
+### Recommended Production Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | AI features | Google AI Studio API key |
+| `STRIPE_SECRET_KEY` | Billing | Stripe secret key (when implemented) |
+| `SENTRY_DSN` | Error tracking | Sentry DSN for error monitoring |
+| `SENTRY_ORG` | Error tracking | Sentry organization slug |
+| `SENTRY_PROJECT` | Error tracking | Sentry project slug |
+| `SENTRY_AUTH_TOKEN` | Error tracking | Sentry auth token for source maps |
+| `SENTRY_ENVIRONMENT` | Error tracking | `production` (auto-set on Vercel) |
+
+### Database Backups
+
+Automated daily backups via cron:
+
+```bash
+# Add to crontab (runs daily at 2 AM)
+0 2 * * * /path/to/scripts/backup-db.sh
+```
+
+Required backup env vars:
+- `BACKUP_DIR` — Backup directory (default: `/var/backups/freelance-crm`)
+- `RETENTION_DAYS` — Days to retain backups (default: 30)
+- `DATABASE_URL` — Must be set
+
+Backup script creates compressed PostgreSQL custom-format dumps with verification and automatic cleanup.
+
+### Pre-Deployment Checklist
+
+Run before every production deploy:
+
+```bash
+npm run predeploy
+```
+
+This runs: typecheck → lint → tests → build → database connectivity → migration status check.
+
+### Health Checks
+
+- `GET /api/health` — Returns `{ database: true, timestamp, version }` (200 if healthy, 503 if DB down)
+- Use with Vercel Health Checks, UptimeRobot, or your monitoring tool
+
+### Error Monitoring (Sentry)
+
+1. Create Sentry project (Next.js)
+2. Add `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` to Vercel env
+3. Source maps auto-uploaded on deploy
+4. Errors captured with user context, release tracking, session replay
+
+### Docker Production
 
 ```dockerfile
 # Build
 docker build -t freelance-crm .
 
 # Run
-docker run -p 3000:3000 \
-  -e DATABASE_URL=... \
-  -e BETTER_AUTH_SECRET=... \
-  -e GOOGLE_CLIENT_ID=... \
-  -e GOOGLE_CLIENT_SECRET=... \
-  -e GEMINI_API_KEY=... \
+docker run -d \
+  --name freelance-crm \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e DATABASE_URL="postgresql://..." \
+  -e BETTER_AUTH_SECRET="..." \
+  -e BETTER_AUTH_URL="https://your-domain.com" \
+  -e GOOGLE_CLIENT_ID="..." \
+  -e GOOGLE_CLIENT_SECRET="..." \
+  -e CRON_SECRET="..." \
+  -e GEMINI_API_KEY="..." \
+  -e SENTRY_DSN="..." \
   freelance-crm
 ```
+
+With docker-compose for production:
+
+```yaml
+# docker-compose.prod.yml
+services:
+  app:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      - DATABASE_URL=postgresql://freelance:freelance@db:5432/freelance
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=https://your-domain.com
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - CRON_SECRET=${CRON_SECRET}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: freelance
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: freelance
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+```
+
+### Vercel Cron for Stale Follow-ups
+
+In `vercel.json`:
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/stale-followups",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
+```
+
+Or use GitHub Actions / external cron with `Authorization: Bearer ${CRON_SECRET}` header.
+
+### Monitoring Checklist
+
+- [ ] `/api/health` returning 200
+- [ ] Sentry receiving test error (`throw new Error("test")` in dev)
+- [ ] Daily backup running and verified
+- [ ] Vercel Cron executing `/api/cron/stale-followups` daily
+- [ ] Google OAuth redirect URI matches production domain
+- [ ] Rate card configured in Settings
+- [ ] Gmail import working (check `/board` after first import)
 
 ## Commands
 
@@ -205,6 +332,8 @@ npm run test:watch   # Watch mode
 npm run db:push      # Push schema to DB
 npm run db:generate  # Generate Prisma client
 npm run db:studio    # Prisma Studio
+npm run predeploy    # Full pre-deployment validation
+npm run backup:db    # Database backup (production)
 ```
 
 ## Roadmap

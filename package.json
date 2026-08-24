@@ -12,10 +12,13 @@
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "predeploy": "bash scripts/pre-deploy.sh",
+    "backup:db": "bash scripts/backup-db.sh"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@sentry/nextjs": "^10.71.0",
     "better-auth": "^1.6.27",
     "next": "16.3.0",
     "prisma": "^6.19.3",
