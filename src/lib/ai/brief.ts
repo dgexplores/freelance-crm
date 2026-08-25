@@ -1,12 +1,12 @@
-import { AiUnavailableError, generateText } from "@/lib/ai/gemini";
+import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
 import { loadDealContext, formatEmails } from "@/lib/ai/context";
 
 /**
  * Pre-call brief for a deal: who the contact is, what they last said,
  * where the deal stands, and what to confirm next.
  */
-export async function generateDealBrief(dealId: string): Promise<string> {
-  const ctx = await loadDealContext(dealId);
+export async function generateDealBrief(userId: string, dealId: string): Promise<string> {
+  const ctx = await loadDealContext(userId, dealId);
   if (!ctx.user.rateCard) {
     throw new Error(
       "No rate card on your account yet — add one (markdown: rates, services, terms) to get useful briefs.",
@@ -44,7 +44,7 @@ ${formatEmails(ctx.emails) || "(none)"}
 5. **Suggested talking points** — 2-3 bullets tied to their rate card.`;
 
   try {
-    return await generateText(prompt, {
+    return await generateTextWithRetry(prompt, {
       temperature: 0.4,
       maxOutputTokens: 1024,
     });

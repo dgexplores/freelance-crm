@@ -1,12 +1,12 @@
-import { AiUnavailableError, generateText } from "@/lib/ai/gemini";
+import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
 import { formatEmails, loadDealContext } from "@/lib/ai/context";
 
 /**
  * Proposal draft for a PROPOSAL-stage deal, written from the user's rate
  * card (services, rates, terms) and the actual thread with the contact.
  */
-export async function generateProposalDraft(dealId: string): Promise<string> {
-  const ctx = await loadDealContext(dealId);
+export async function generateProposalDraft(userId: string, dealId: string): Promise<string> {
+  const ctx = await loadDealContext(userId, dealId);
   if (ctx.deal.stage !== "PROPOSAL") {
     throw new Error(
       `Deal "${ctx.deal.title}" is in stage ${ctx.deal.stage}; proposals are only generated for PROPOSAL-stage deals.`,
@@ -53,7 +53,7 @@ ${formatEmails(ctx.emails) || "(none)"}
 (2-3 concrete steps, including first availability.)`;
 
   try {
-    return await generateText(prompt, {
+    return await generateTextWithRetry(prompt, {
       temperature: 0.4,
       maxOutputTokens: 2048,
     });

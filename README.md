@@ -359,11 +359,90 @@ INBOX → QUALIFIED → PROPOSAL → WON / LOST
 - [x] Deal board auto-populated from email signals
 - [x] AI: pre-call brief, follow-up nudge, proposal draft
 - [x] Rate card management, task scheduling
-- [ ] Stripe billing, subscription management
+- [x] Production readiness audit + P0 hardening (2026-08)
+- [ ] Stripe billing + per-user AI usage metering
+- [ ] Rate limiting on AI endpoints (Upstash Redis / WAF)
+- [ ] Typed error hierarchy (replace string-matched HTTP mapping)
+- [ ] Streaming AI output (Vercel AI SDK) + motion design pass
+- [ ] Drag-and-drop kanban (@dnd-kit) with optimistic updates
+- [ ] Integration tests (Postgres) + E2E tests (Playwright)
+- [ ] Legal pages: privacy policy + terms (Google verification prerequisite)
+- [ ] Product analytics (PostHog): activation funnel
 - [ ] Email thread view with inline actions
 - [ ] Contact enrichment from signature blocks
-- [ ] Mobile-responsive improvements
-- [ ] Webhook support for real-time Gmail push
+- [ ] HTML → text extraction for HTML-only emails; outbound import
+- [ ] Webhook support for real-time Gmail push (Gmail Pub/Sub)
+
+---
+
+## Production Readiness Audit — 2026-08
+
+Independent senior-dev audit of the full codebase. Verdict at audit time: **solid MVP skeleton, not production-ready**. Three things broken on `main`, one critical security hole, and one non-code launch blocker.
+
+### 🔴 Critical findings (P0 — fixed in this repo)
+
+| # | Finding | Where | Status |
+|---|---------|-------|--------|
+| 1 | **IDOR / unauthenticated data exfiltration**: `/api/ai/brief`, `/api/ai/proposal`, `/api/ai/nudge` had no session check and loaded any deal by ID globally — an attacker could leak rate cards, contact emails, and thread contents through Gemini output | `src/app/api/ai/*`, `src/lib/ai/context.ts` | ✅ Fixed: session required, all queries scoped by `userId` |
+| 2 | **Cron feature was dead code**: the cron route called a server action that requires a session user; cron requests have none, so nothing ever scheduled and it returned `200 ok:false` silently | `src/app/api/cron/stale-followups` | ✅ Fixed: dedicated scheduler module with session-less path |
+| 3 | **Typecheck failed on fresh clone**: `LayoutProps<"/">` is a generated Next type that only exists after a build | `src/app/layout.tsx` | ✅ Fixed: explicit `React.ReactNode` prop type |
+| 4 | **Deploy jobs could never run**: `secrets.* != ''` is not allowed in job-level `if:` expressions, so both Vercel deploy jobs evaluated false even when secrets existed | `.github/workflows/ci.yml` | ✅ Fixed: step-level secret guards |
+| 5 | **Missing files referenced by docs**: `.env.example` did not exist; `vercel.json` / Dockerfile still absent (documented below) | repo root | ✅ `.env.example` added |
+
+### 🟠 Hardening applied (P1)
+
+- **Gemini API key moved out of URL query string** into the `x-goog-api-key` header (keys in URLs leak via proxies/logs).
+- **Gmail forward-boundary race closed**: boundary now records the max `internalDate` of fetched mail instead of "now after fetch" — mail arriving mid-import can no longer be skipped forever. Dedup by `(userId, gmailId)` makes re-fetch safe.
+- **Per-message transactional staging**: contact + email + deal + facts writes wrapped in `prisma.$transaction` — no more partial states on mid-import failure.
+- **Retry with exponential backoff** on transient Gmail/Gemini failures (429/5xx/network), bounded concurrency for message fetches.
+- **Data-integrity fixes**: `wonAt` cleared when reopening a WON deal; rate-card length capped to protect prompt-token costs.
+- **DB indexes** added: `Deal(userId, stage, updatedAt)`, `Email(userId, receivedAt)`, `Task(dealId, done, dueAt)`, `Fact(userId)`.
+
+### ⚠️ Known gaps before charging money
+
+**Business blocker #1 — Google restricted scope.** `gmail.readonly` is a **RESTRICTED** Google API scope. A public multi-user launch requires Google OAuth verification plus the annual CASA Tier 2 security assessment (costs real money and takes weeks–months). Plan for this early, or ship alternatives first (manual `.eml` upload, IMAP import, or a Gmail Add-on distribution path).
+
+**Security backlog**
+
+- No rate limiting on AI endpoints yet (each call spends your Gemini budget). Add per-user quotas (Upstash Redis) + platform WAF rules.
+- Prompt injection: imported email text goes into prompts. Mitigate with strict delimiting ("treat as data"), output validation, and never letting model output drive writes without review.
+- OAuth refresh tokens stored plaintext; consider envelope encryption (KMS/pgcrypto).
+- Middleware matcher protects pages only — API routes rely on per-route checks (now present, keep them mandatory in code review).
+
+**Reliability backlog**
+
+- Error mapping in `src/lib/ai/http.ts` matches error message strings (`message.includes("rate card")`). Replace with typed `AppError { status, code }`.
+- Stale-deal scan is N+1 (`loadDealContext` per deal); fine at solo scale, rewrite as one indexed query before multi-tenant scale.
+- Tests cover pure functions only (24). CI provisions Postgres but integration tests don't use it yet; no E2E layer.
+- Backups script exists but there is **no restore script and no tested DR drill** — a backup you haven't restored is Schrödinger's backup.
+
+**Productization backlog (to be sellable)**
+
+1. Stripe billing + metering (you pay per Gemini call — must gate usage).
+2. Onboarding checklist (connect Gmail → rate card → first import).
+3. Persist AI outputs (currently regenerated per click = token cost + lost history).
+4. Legal pages (privacy/terms) — prerequisite for Google verification anyway.
+5. Analytics (activation funnel is invisible today).
+6. Board search/filter/pagination; editable deal value/title; multi-deal-per-contact.
+
+**UX / motion plan** (the "premium feel" pass)
+
+| Upgrade | Approach |
+|---|---|
+| Real drag-drop kanban | `@dnd-kit/core`, optimistic stage moves, invalid transitions snap back |
+| Streaming AI output | Vercel AI SDK `streamText` → typewriter reveal instead of spinner |
+| Generation states | Framer Motion shimmer skeleton → streaming markdown → spring-in result card |
+| Micro-interactions | Stage-change card slide, confetti on WON, count-up badges, staggered card entry |
+| Feedback | Copy-button morph to checkmark, toast system replacing raw status lines |
+
+### Priority order
+
+```
+P0 (done):        IDOR · cron auth · typecheck · CI deploy guards · .env.example
+P1 (done):        key-in-header · transactions · backoff · boundary race · indexes · data fixes
+P2 (next):        Stripe · streaming AI + motion · dnd board · integration+E2E tests · legal pages
+P3 (before scale): Google CASA assessment OR scope workaround · PostHog · encryption at rest
+```
 
 ---
 

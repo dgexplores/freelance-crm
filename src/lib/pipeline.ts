@@ -145,8 +145,9 @@ function buildFacts(
  * Orchestrate a forward-only import run:
  *  1. resolve the forward-only boundary (recorded on first successful run)
  *  2. fetch only messages newer than the boundary (gmail.readonly)
- *  3. stage them into contacts/deals/facts
- *  4. persist the boundary only after a successful run (no lost mail)
+ *  3. stage them into contacts/deals/facts (each message atomically)
+ *  4. persist the boundary at the newest fetched message timestamp only
+ *     after a successful run (no lost mail; overlap is safe via dedupe)
  */
 export async function importGmail(
   userId: string,
@@ -167,7 +168,13 @@ export async function importGmail(
   });
 
   if (pipeline.errors.length === 0) {
-    await recordForwardOnlyBoundary(userId);
+    // Advance to the newest message we actually saw — never "now" — so mail
+    // arriving mid-import is picked up next run instead of being skipped.
+    const newestFetched = messages.reduce<Date | null>(
+      (max, m) => (!max || m.receivedAt > max ? m.receivedAt : max),
+      null,
+    );
+    await recordForwardOnlyBoundary(userId, newestFetched ?? new Date());
     logger.info("Gmail import completed successfully", { userId, ...pipeline });
   } else {
     logger.warn("Gmail import completed with errors", { userId, ...pipeline });
@@ -200,14 +207,6 @@ export async function runPipeline(
 
   for (const msg of messages) {
     try {
-      const existing = await prisma.email.findUnique({
-        where: { userId_gmailId: { userId, gmailId: msg.gmailId } },
-      });
-      if (existing) {
-        result.skipped += 1;
-        continue;
-      }
-
       const { email: senderEmail, name: senderName } = parseFrom(msg.fromAddr);
       if (!senderEmail) {
         result.skipped += 1;
@@ -215,85 +214,113 @@ export async function runPipeline(
         continue;
       }
 
-      // Contact dedupe: one contact per (userId, email).
-      const existingContact = await prisma.contact.findUnique({
-        where: { userId_email: { userId, email: senderEmail } },
+      // Dedupe check outside the transaction (cheap, idempotent).
+      const alreadyImported = await prisma.email.findUnique({
+        where: { userId_gmailId: { userId, gmailId: msg.gmailId } },
+        select: { id: true },
       });
-      let contact = existingContact;
-      if (!contact) {
-        contact = await prisma.contact.create({
+      if (alreadyImported) {
+        result.skipped += 1;
+        continue;
+      }
+
+      // Everything for this message lands atomically: contact upsert,
+      // email row, deal evidence, facts — or none of it on failure.
+      const staged = await prisma.$transaction(async (tx) => {
+        // Contact dedupe: one contact per (userId, email).
+        const existingContact = await tx.contact.findUnique({
+          where: { userId_email: { userId, email: senderEmail } },
+        });
+        let contactId: string;
+        let isNewContact = false;
+        if (!existingContact) {
+          const created = await tx.contact.create({
+            data: {
+              userId,
+              email: senderEmail,
+              name: senderName,
+              source: "inbound",
+              lastContact: msg.receivedAt,
+            },
+          });
+          contactId = created.id;
+          isNewContact = true;
+        } else {
+          await tx.contact.update({
+            where: { id: existingContact.id },
+            data: {
+              lastContact: msg.receivedAt,
+              ...(senderName && !existingContact.name ? { name: senderName } : {}),
+            },
+          });
+          contactId = existingContact.id;
+        }
+
+        await tx.email.create({
           data: {
             userId,
-            email: senderEmail,
-            name: senderName,
-            source: "inbound",
-            lastContact: msg.receivedAt,
+            gmailId: msg.gmailId,
+            threadId: msg.threadId,
+            subject: msg.subject || "(no subject)",
+            fromAddr: msg.fromAddr,
+            body: msg.body || msg.snippet || "(no text)",
+            direction: "INBOUND",
+            receivedAt: msg.receivedAt,
+            contactId,
           },
         });
-        result.contacts += 1;
-        logger.debug("Created new contact", { userId, contactId: contact.id, email: senderEmail });
-      } else {
-        contact = await prisma.contact.update({
-          where: { id: contact.id },
-          data: {
-            lastContact: msg.receivedAt,
-            ...(senderName && !contact.name ? { name: senderName } : {}),
-          },
-        });
-      }
 
-      await prisma.email.create({
-        data: {
-          userId,
-          gmailId: msg.gmailId,
-          threadId: msg.threadId,
-          subject: msg.subject || "(no subject)",
-          fromAddr: msg.fromAddr,
-          body: msg.body || msg.snippet || "(no text)",
-          direction: "INBOUND",
-          receivedAt: msg.receivedAt,
-          contactId: contact.id,
-        },
+        // Deal staging: one deal per contact, evidence-based whyInPipeline.
+        let isNewDeal = false;
+        const existingDeal = await tx.deal.findFirst({
+          where: { userId, contactId },
+          orderBy: { createdAt: "asc" },
+        });
+        if (!existingDeal) {
+          await tx.deal.create({
+            data: {
+              userId,
+              contactId,
+              title: makeDealTitle(msg, senderName),
+              stage: "INBOX",
+              source: "email",
+              whyInPipeline: evidenceFor(msg),
+            },
+          });
+          isNewDeal = true;
+        } else if (existingDeal.stage === "INBOX") {
+          // Keep the evidence fresh but only while the deal is still INBOX;
+          // a manually-moved deal keeps its reason.
+          await tx.deal.update({
+            where: { id: existingDeal.id },
+            data: {
+              whyInPipeline: `Latest ${evidenceFor(msg)}`,
+              updatedAt: new Date(),
+            },
+          });
+        }
+
+        const facts = buildFacts(msg, contactId, userId);
+        if (facts.length > 0) {
+          await tx.fact.createMany({ data: facts });
+        }
+        return { contactId, isNewContact, isNewDeal, factCount: facts.length };
       });
 
-      // Deal staging: one deal per contact, evidence-based whyInPipeline.
-      const existingDeal = await prisma.deal.findFirst({
-        where: { userId, contactId: contact.id },
-        orderBy: { createdAt: "asc" },
-      });
-      if (!existingDeal) {
-        await prisma.deal.create({
-          data: {
-            userId,
-            contactId: contact.id,
-            title: makeDealTitle(msg, senderName),
-            stage: "INBOX",
-            source: "email",
-            whyInPipeline: evidenceFor(msg),
-          },
-        });
-        result.deals += 1;
-        logger.debug("Created new deal", { userId, dealId: "new", contactId: contact.id });
-      } else if (existingDeal.stage === "INBOX") {
-        // Keep the evidence fresh but only while the deal is still INBOX;
-        // a manually-moved deal keeps its reason.
-        await prisma.deal.update({
-          where: { id: existingDeal.id },
-          data: {
-            whyInPipeline: `Latest ${evidenceFor(msg)}`,
-            updatedAt: new Date(),
-          },
-        });
-      }
-
-      const facts = buildFacts(msg, contact.id, userId);
-      if (facts.length > 0) {
-        await prisma.fact.createMany({ data: facts });
-        result.facts += facts.length;
-        logger.debug("Created facts", { userId, contactId: contact.id, factCount: facts.length });
-      }
-
+      // Counters only advance after a committed transaction.
       result.imported += 1;
+      if (staged.isNewContact) {
+        result.contacts += 1;
+        logger.debug("Created new contact", { userId, contactId: staged.contactId, email: senderEmail });
+      }
+      if (staged.isNewDeal) {
+        result.deals += 1;
+        logger.debug("Created new deal", { userId, dealId: "new", contactId: staged.contactId });
+      }
+      result.facts += staged.factCount;
+      if (staged.factCount > 0) {
+        logger.debug("Created facts", { userId, contactId: staged.contactId, factCount: staged.factCount });
+      }
     } catch (err) {
       const errorMsg = `Message ${msg.gmailId}: ${err instanceof Error ? err.message : String(err)}`;
       result.errors.push(errorMsg);

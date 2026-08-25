@@ -19,7 +19,7 @@ export async function generateBriefAction(dealId: string): Promise<ActionResult<
   const deal = await prisma.deal.findFirst({ where: { id: dealId, userId: user.id } });
   if (!deal) return { ok: false, message: "Deal not found." };
   try {
-    const brief = await generateDealBrief(dealId);
+    const brief = await generateDealBrief(user.id, dealId);
     return { ok: true, message: "Brief generated.", data: brief };
   } catch (err) {
     if (err instanceof AiUnavailableError) return { ok: false, message: "AI not configured. Set GEMINI_API_KEY." };
@@ -33,7 +33,7 @@ export async function generateProposalAction(dealId: string): Promise<ActionResu
   const deal = await prisma.deal.findFirst({ where: { id: dealId, userId: user.id } });
   if (!deal) return { ok: false, message: "Deal not found." };
   try {
-    const proposal = await generateProposalDraft(dealId);
+    const proposal = await generateProposalDraft(user.id, dealId);
     return { ok: true, message: "Proposal generated.", data: proposal };
   } catch (err) {
     if (err instanceof AiUnavailableError) return { ok: false, message: "AI not configured. Set GEMINI_API_KEY." };
@@ -47,7 +47,7 @@ export async function generateNudgeAction(dealId: string): Promise<ActionResult<
   const deal = await prisma.deal.findFirst({ where: { id: dealId, userId: user.id } });
   if (!deal) return { ok: false, message: "Deal not found." };
   try {
-    const nudge = await generateFollowUpNudge(dealId);
+    const nudge = await generateFollowUpNudge(user.id, dealId);
     return { ok: true, message: "Nudge generated.", data: { draft: nudge.draft } };
   } catch (err) {
     if (err instanceof AiUnavailableError) return { ok: false, message: "AI not configured. Set GEMINI_API_KEY." };

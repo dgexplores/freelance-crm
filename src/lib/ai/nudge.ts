@@ -1,4 +1,4 @@
-import { AiUnavailableError, generateText } from "@/lib/ai/gemini";
+import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
 import {
   NUDGE_STAGES,
   formatEmails,
@@ -24,17 +24,20 @@ export interface StaleDeal {
   whyInPipeline: string | null;
 }
 
-/** Deals in INBOX/QUALIFIED with no activity for >= `days` days. */
-export async function listStaleDeals(days: number = DEFAULT_STALE_DAYS): Promise<StaleDeal[]> {
+/** Deals owned by `userId` in INBOX/QUALIFIED with no activity for >= `days` days. */
+export async function listStaleDeals(
+  userId: string,
+  days: number = DEFAULT_STALE_DAYS,
+): Promise<StaleDeal[]> {
   const deals = await prisma.deal.findMany({
-    where: { stage: { in: NUDGE_STAGES } },
+    where: { stage: { in: NUDGE_STAGES }, userId },
     include: { contact: true },
     orderBy: { updatedAt: "asc" },
   });
 
   const stale: StaleDeal[] = [];
   for (const deal of deals) {
-    const ctx = await loadDealContext(deal.id);
+    const ctx = await loadDealContext(userId, deal.id);
     if (!isStaleDeal(ctx, days)) continue;
     stale.push({
       dealId: deal.id,
@@ -64,10 +67,11 @@ export interface FollowUpNudge {
  * Returns the draft; the caller decides whether to send or schedule it.
  */
 export async function generateFollowUpNudge(
+  userId: string,
   dealId: string,
   days: number = DEFAULT_STALE_DAYS,
 ): Promise<FollowUpNudge> {
-  const ctx = await loadDealContext(dealId);
+  const ctx = await loadDealContext(userId, dealId);
   if (!isStaleDeal(ctx, days)) {
     throw new Error(
       `Deal "${ctx.deal.title}" is not stale (stage ${ctx.deal.stage}, ${idleDays(ctx)}d idle; needs ${days}d in ${NUDGE_STAGES.join("/")}).`,
@@ -99,7 +103,7 @@ Draft:
 <2-4 sentence email body. Reference something specific from the real thread. Ask a single low-friction question. Do not apologize repeatedly. No fluff.>`;
 
   try {
-    const draft = await generateText(prompt, {
+    const draft = await generateTextWithRetry(prompt, {
       temperature: 0.5,
       maxOutputTokens: 700,
     });

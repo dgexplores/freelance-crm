@@ -30,13 +30,21 @@ export interface DealContext {
   lastActivityAt: Date;
 }
 
-/** Load deal + contact + user + the contact's recent email history. */
-export async function loadDealContext(dealId: string): Promise<DealContext> {
-  const deal = await prisma.deal.findUnique({
-    where: { id: dealId },
+/** Thrown when a deal does not exist or is not owned by the requesting user. */
+export class DealNotFoundError extends Error {
+  constructor() {
+    super("Deal not found");
+    this.name = "DealNotFoundError";
+  }
+}
+
+/** Load deal + contact + user + the contact's recent email history, strictly scoped to `userId`. */
+export async function loadDealContext(userId: string, dealId: string): Promise<DealContext> {
+  const deal = await prisma.deal.findFirst({
+    where: { id: dealId, userId },
     include: { contact: true, user: true },
   });
-  if (!deal) throw new Error("Deal not found");
+  if (!deal) throw new DealNotFoundError();
 
   const emails = await prisma.email.findMany({
     where: { contactId: deal.contactId, userId: deal.userId },

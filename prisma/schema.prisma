@@ -96,21 +96,24 @@ model Contact {
 }
 
 model Deal {
-  id           String    @id @default(cuid())
-  title        String
-  stage        DealStage @default(INBOX)
-  value        Int? // in dollars, estimated
-  whyInPipeline String?  // evidence: the email/context that put it here
-  source       String?
-  wonAt        DateTime?
-  lostReason   String?
-  contactId    String
-  contact      Contact   @relation(fields: [contactId], references: [id])
-  userId       String
-  user         User      @relation(fields: [userId], references: [id])
-  tasks        Task[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  title         String
+  stage         DealStage @default(INBOX)
+  value         Int? // in dollars, estimated
+  whyInPipeline String?   // evidence: the email/context that put it here
+  source        String?
+  wonAt         DateTime?
+  lostReason    String?
+  contactId     String
+  contact       Contact   @relation(fields: [contactId], references: [id])
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  tasks         Task[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, stage, updatedAt])
+  @@index([userId, contactId])
 }
 
 model Email {
@@ -130,6 +133,8 @@ model Email {
   user      User           @relation(fields: [userId], references: [id])
 
   @@unique([userId, gmailId])
+  @@index([userId, receivedAt])
+  @@index([contactId, receivedAt])
 }
 
 model Task {
@@ -142,6 +147,9 @@ model Task {
   dealId    String
   deal      Deal     @relation(fields: [dealId], references: [id])
   createdAt DateTime @default(now())
+
+  @@index([dealId, kind, done])
+  @@index([dueAt])
 }
 
 model Fact {
@@ -155,4 +163,7 @@ model Fact {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([contactId])
 }

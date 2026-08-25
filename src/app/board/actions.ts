@@ -58,7 +58,13 @@ export async function moveDealAction(
     where: { id: deal.id },
     data: {
       stage: toStage as DealStageValue,
-      ...(toStage === "WON" ? { wonAt: new Date() } : {}),
+      ...(toStage === "WON" && !deal.wonAt ? { wonAt: new Date() } : {}),
+      // Leaving WON clears the timestamp; stale wonAt on an open deal is a lie.
+      ...(deal.stage === "WON" && toStage !== "WON" ? { wonAt: null } : {}),
+      // Entering LOST without a reason keeps the field honest for reporting.
+      ...(toStage === "LOST" && !deal.lostReason
+        ? { lostReason: "No reason recorded." }
+        : {}),
     },
   });
   revalidatePath("/board");

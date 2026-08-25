@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { isNetworkError, withRetry } from "@/lib/retry";
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -138,16 +139,30 @@ async function gmailFetch(
   token: string,
   url: string,
 ): Promise<unknown> {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    throw new GmailImportError(
-      `Gmail API request failed (${res.status}): ${res.statusText}`,
-      res.status,
-    );
+  return withRetry(
+    async () => {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new GmailImportError(
+          `Gmail API request failed (${res.status}): ${res.statusText}`,
+          res.status,
+        );
+      }
+      return res.json();
+    },
+    { retryOn: isTransientGmailError },
+  );
+}
+
+/** Rate limits and upstream server faults are worth retrying; auth/4xx are not. */
+function isTransientGmailError(err: unknown): boolean {
+  if (isNetworkError(err)) return true;
+  if (err instanceof GmailImportError) {
+    return err.status === 429 || err.status >= 500;
   }
-  return res.json();
+  return false;
 }
 
 export async function fetchNewMessages(
@@ -179,32 +194,37 @@ export async function fetchNewMessages(
     const ids = list.messages?.map((m) => m.id) ?? [];
     if (ids.length === 0) break;
 
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        const msg = (await gmailFetch(
-          token,
-          `${GMAIL_API}/messages/${id}?format=full`,
-        )) as GmailMessageResponse;
-        const headers = msg.payload?.headers ?? [];
-        const getHeader = (name: string) =>
-          headers.find(
-            (h) => h.name.toLowerCase() === name.toLowerCase(),
-          )?.value;
-        const receivedAt = new Date(Number(msg.internalDate));
-        const body = extractBody(msg.payload);
-        return {
-          gmailId: msg.id,
-          threadId: msg.threadId,
-          subject: getHeader("Subject") ?? "",
-          fromAddr: getHeader("From") ?? "",
-          receivedAt,
-          snippet: msg.snippet ?? "",
-          body,
-        } satisfies ImportedMessage;
-      }),
-    );
-
-    imported.push(...results.filter((m) => m.fromAddr.trim() !== ""));
+    // Bounded concurrency: batches of parallel message fetches instead of
+    // firing every request at once (keeps us under per-user Gmail quota).
+    const CONCURRENCY = 5;
+    for (let i = 0; i < ids.length; i += CONCURRENCY) {
+      const batch = ids.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async (id) => {
+          const msg = (await gmailFetch(
+            token,
+            `${GMAIL_API}/messages/${id}?format=full`,
+          )) as GmailMessageResponse;
+          const headers = msg.payload?.headers ?? [];
+          const getHeader = (name: string) =>
+            headers.find(
+              (h) => h.name.toLowerCase() === name.toLowerCase(),
+            )?.value;
+          const receivedAt = new Date(Number(msg.internalDate));
+          const body = extractBody(msg.payload);
+          return {
+            gmailId: msg.id,
+            threadId: msg.threadId,
+            subject: getHeader("Subject") ?? "",
+            fromAddr: getHeader("From") ?? "",
+            receivedAt,
+            snippet: msg.snippet ?? "",
+            body,
+          } satisfies ImportedMessage;
+        }),
+      );
+      imported.push(...results.filter((m) => m.fromAddr.trim() !== ""));
+    }
 
     nextPageToken = list.nextPageToken;
     if (!nextPageToken) break;
@@ -230,10 +250,19 @@ export async function getImportContext(userId: string): Promise<ImportContext> {
   return { firstRun: true, sinceMs: Date.now() - 24 * 60 * 60 * 1000 };
 }
 
-export async function recordForwardOnlyBoundary(userId: string): Promise<void> {
+/**
+ * Record the forward-only boundary at `boundaryAt`. Callers should pass the
+ * newest message timestamp they actually fetched (not "now"), so mail that
+ * arrives mid-import is picked up by the next run instead of being skipped
+ * forever. Re-fetching overlap is safe due to (userId, gmailId) dedupe.
+ */
+export async function recordForwardOnlyBoundary(
+  userId: string,
+  boundaryAt: Date,
+): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
-    data: { gmailSyncStartedAt: new Date() },
+    data: { gmailSyncStartedAt: boundaryAt },
   });
 }
 

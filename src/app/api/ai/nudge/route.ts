@@ -1,9 +1,15 @@
 import { generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 import { aiErrorResponse } from "@/lib/ai/http";
+import { getUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const user = await getUser();
+  if (!user) {
+    return Response.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
   try {
     let dealId = "";
     let days = DEFAULT_STALE_DAYS;
@@ -17,7 +23,7 @@ export async function POST(request: Request) {
     }
     if (!dealId) throw new Error("Missing dealId in request body.");
 
-    const nudge = await generateFollowUpNudge(dealId, days);
+    const nudge = await generateFollowUpNudge(user.id, dealId, days);
     return Response.json(nudge);
   } catch (err) {
     return aiErrorResponse(err);

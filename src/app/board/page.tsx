@@ -46,7 +46,7 @@ export default async function BoardPage() {
       },
     }),
     prisma.fact.count({ where: { userId: user.id } }),
-    listStaleDeals(5),
+    listStaleDeals(user.id, 5),
   ]);
 
   const serializable = deals.map((deal) => ({

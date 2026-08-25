@@ -1,68 +1,34 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { listStaleDeals, generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
+import { revalidatePath } from "next/cache";
 import { getUser } from "@/lib/session";
+import { scheduleFollowUpsForUser, type SchedulerResult } from "@/lib/scheduler";
+import { DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 
-export type SchedulerResult = {
-  ok: boolean;
-  message: string;
-  scheduled: number;
-  errors: string[];
-};
+export type { SchedulerResult };
 
 /**
- * Schedule follow-up nudges for all stale deals.
- * Called periodically (e.g., via cron) or manually from the UI.
+ * Schedule follow-up nudges for the signed-in user's stale deals.
+ * Session-scoped wrapper around the shared scheduler in @/lib/scheduler.
  */
-export async function scheduleStaleFollowUpsAction(days: number = DEFAULT_STALE_DAYS): Promise<SchedulerResult> {
+export async function scheduleStaleFollowUpsAction(
+  days: number = DEFAULT_STALE_DAYS,
+): Promise<SchedulerResult & { ok: boolean; message: string }> {
   const user = await getUser();
-  if (!user) return { ok: false, message: "Not authenticated.", scheduled: 0, errors: [] };
-
-  const staleDeals = await listStaleDeals(days);
-
-  // Filter to only this user's deals
-  const deals = await prisma.deal.findMany({
-    where: { userId: user.id, stage: { in: ["INBOX", "QUALIFIED"] } },
-  });
-  const userDealIds = new Set(deals.map((d) => d.id));
-  const relevantStale = staleDeals.filter((d) => userDealIds.has(d.dealId));
-
-  let scheduled = 0;
-  const errors: string[] = [];
-
-  for (const stale of relevantStale) {
-    // Check if there's already a pending follow-up task for this deal
-    const existing = await prisma.task.findFirst({
-      where: { dealId: stale.dealId, kind: "follow_up", done: false },
-    });
-    if (existing) continue;
-
-    try {
-      const nudge = await generateFollowUpNudge(stale.dealId, days);
-      // Schedule for tomorrow morning
-      const dueAt = new Date();
-      dueAt.setDate(dueAt.getDate() + 1);
-      dueAt.setHours(9, 0, 0, 0);
-
-      await prisma.task.create({
-        data: {
-          dealId: stale.dealId,
-          kind: "follow_up",
-          dueAt,
-          reason: `Auto-scheduled: deal idle ${stale.idleDays}d. ${nudge.draft.slice(0, 200)}...`,
-        },
-      });
-      scheduled++;
-    } catch (err) {
-      errors.push(`${stale.title}: ${err instanceof Error ? err.message : "Failed"}`);
-    }
+  if (!user) {
+    return { ok: false, message: "Not authenticated.", scheduled: 0, errors: [] };
   }
 
-  return {
-    ok: true,
-    message: `Scheduled ${scheduled} follow-up${scheduled !== 1 ? "s" : ""}.`,
-    scheduled,
-    errors,
-  };
+  try {
+    const result = await scheduleFollowUpsForUser(user.id, days);
+    revalidatePath("/board");
+    return {
+      ok: true,
+      message: `Scheduled ${result.scheduled} follow-up${result.scheduled !== 1 ? "s" : ""}.`,
+      ...result,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Scheduling failed.";
+    return { ok: false, message, scheduled: 0, errors: [message] };
+  }
 }
