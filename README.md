@@ -360,18 +360,20 @@ INBOX → QUALIFIED → PROPOSAL → WON / LOST
 - [x] AI: pre-call brief, follow-up nudge, proposal draft
 - [x] Rate card management, task scheduling
 - [x] Production readiness audit + P0 hardening (2026-08)
-- [ ] Stripe billing + per-user AI usage metering
-- [ ] Rate limiting on AI endpoints (Upstash Redis / WAF)
-- [ ] Typed error hierarchy (replace string-matched HTTP mapping)
-- [ ] Streaming AI output (Vercel AI SDK) + motion design pass
-- [ ] Drag-and-drop kanban (@dnd-kit) with optimistic updates
-- [ ] Integration tests (Postgres) + E2E tests (Playwright)
-- [ ] Legal pages: privacy policy + terms (Google verification prerequisite)
-- [ ] Product analytics (PostHog): activation funnel
-- [ ] Email thread view with inline actions
-- [ ] Contact enrichment from signature blocks
+- [x] Typed error hierarchy + per-user AI rate limiting
+- [x] Streaming AI output (zero-dep SSE) + motion design pass
+- [x] Drag-and-drop kanban (@dnd-kit) with optimistic updates
+- [x] Integration test suite against real Postgres (CI-enforced)
+- [x] Production infra: Supabase Postgres provisioned, Vercel project + secrets wired, Docker prod stack
+- [ ] Stripe billing + per-user AI usage metering *(deferred by owner)*
+- [ ] Persist AI outputs to database
+- [ ] Onboarding checklist for first-run users
+- [ ] Redis-backed rate limiting (multi-instance ready)
+- [ ] E2E tests (Playwright) — integration layer done
 - [ ] HTML → text extraction for HTML-only emails; outbound import
+- [ ] Legal pages: replace placeholder contact info with real entity details
 - [ ] Webhook support for real-time Gmail push (Gmail Pub/Sub)
+- [ ] Pre-public-launch decision: `gmail.readonly` CASA assessment vs waitlist-first
 
 ---
 
@@ -440,9 +442,13 @@ Independent senior-dev audit of the full codebase. Verdict at audit time: **soli
 ```
 P0 (done):        IDOR · cron auth · typecheck · CI deploy guards · .env.example
 P1 (done):        key-in-header · transactions · backoff · boundary race · indexes · data fixes
-P2 (next):        Stripe · streaming AI + motion · dnd board · integration+E2E tests · legal pages
-P3 (before scale): Google CASA assessment OR scope workaround · PostHog · encryption at rest
+P2 (done):        typed errors · rate limits · streaming AI + motion UI · dnd board
+                  integration tests · legal pages · Docker stack · restore script
+P3 (open):        Vercel build un-stick · Google OAuth + Gemini keys → first live deploy
+Backlog:          Stripe · persist AI outputs · onboarding · Redis limits · E2E · CASA decision
 ```
+
+Full delivery record: see [FREELANCE-CRM-SESSION-LOG.md](./FREELANCE-CRM-SESSION-LOG.md).
 
 ---
 
