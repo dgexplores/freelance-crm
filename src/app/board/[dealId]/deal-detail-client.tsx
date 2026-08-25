@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { generateBriefAction, generateProposalAction, generateNudgeAction } from "./actions";
 
 type Deal = {
   id: string;
@@ -77,6 +76,42 @@ function fmtDateTime(iso: string | null): string {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/**
+ * POST to a streaming AI endpoint and forward plain-text chunks as they
+ * arrive. Non-OK responses are JSON errors — parse and surface them.
+ */
+async function streamGeneration(
+  endpoint: string,
+  body: Record<string, unknown>,
+  onChunk: (text: string) => void,
+): Promise<void> {
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(message);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("Streaming is not supported in this browser.");
+  const decoder = new TextDecoder();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    if (chunk) onChunk(chunk);
+  }
+}
+
 export function DealDetailClient(props: {
   deal: Deal;
   userName: string;
@@ -103,9 +138,9 @@ export function DealDetailClient(props: {
     setError(null);
     setBrief(null);
     try {
-      const res = await generateBriefAction(deal.id);
-      if (res.ok) setBrief(res.data ?? null);
-      else setError(res.message);
+      await streamGeneration("/api/ai/brief", { dealId: deal.id }, (chunk) =>
+        setBrief((prev) => (prev ?? "") + chunk),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate brief");
     } finally {
@@ -126,9 +161,9 @@ export function DealDetailClient(props: {
     setError(null);
     setProposal(null);
     try {
-      const res = await generateProposalAction(deal.id);
-      if (res.ok) setProposal(res.data ?? null);
-      else setError(res.message);
+      await streamGeneration("/api/ai/proposal", { dealId: deal.id }, (chunk) =>
+        setProposal((prev) => (prev ?? "") + chunk),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate proposal");
     } finally {
@@ -149,9 +184,9 @@ export function DealDetailClient(props: {
     setError(null);
     setNudge(null);
     try {
-      const res = await generateNudgeAction(deal.id);
-      if (res.ok) setNudge(res.data?.draft ?? null);
-      else setError(res.message);
+      await streamGeneration("/api/ai/nudge", { dealId: deal.id }, (chunk) =>
+        setNudge((prev) => (prev ?? "") + chunk),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate nudge");
     } finally {
@@ -250,33 +285,68 @@ export function DealDetailClient(props: {
                 <p className="text-sm text-zinc-700 whitespace-pre-wrap">{deal.whyInPipeline ?? "No evidence recorded."}</p>
               </section>
 
-              {brief && (
-                <section className="rounded-lg border border-zinc-200 bg-white p-6">
+              {(brief !== null || briefLoading) && (
+                <section className="animate-fade-up rounded-lg border border-zinc-200 bg-white p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Pre-Call Brief</h2>
-                    <button onClick={() => copyToClipboard(brief)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                    {!briefLoading && brief && (
+                      <button onClick={() => copyToClipboard(brief)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                    )}
                   </div>
-                  <div className="prose prose-sm max-w-none text-zinc-700 whitespace-pre-wrap bg-zinc-50 rounded-lg p-4">{brief}</div>
+                  {briefLoading && brief === null ? (
+                    <div className="space-y-2" aria-busy="true">
+                      <div className="ai-shimmer h-3 w-3/4 rounded" />
+                      <div className="ai-shimmer h-3 w-full rounded" />
+                      <div className="ai-shimmer h-3 w-5/6 rounded" />
+                    </div>
+                  ) : (
+                    <div className={`prose prose-sm max-w-none whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-zinc-700${briefLoading ? " ai-caret" : ""}`}>
+                      {brief}
+                    </div>
+                  )}
                 </section>
               )}
 
-              {proposal && (
-                <section className="rounded-lg border border-zinc-200 bg-white p-6">
+              {(proposal !== null || proposalLoading) && (
+                <section className="animate-fade-up rounded-lg border border-zinc-200 bg-white p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Proposal Draft</h2>
-                    <button onClick={() => copyToClipboard(proposal)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                    {!proposalLoading && proposal && (
+                      <button onClick={() => copyToClipboard(proposal)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                    )}
                   </div>
-                  <div className="prose prose-sm max-w-none text-zinc-700 whitespace-pre-wrap bg-zinc-50 rounded-lg p-4">{proposal}</div>
+                  {proposalLoading && proposal === null ? (
+                    <div className="space-y-2" aria-busy="true">
+                      <div className="ai-shimmer h-3 w-2/3 rounded" />
+                      <div className="ai-shimmer h-3 w-full rounded" />
+                      <div className="ai-shimmer h-3 w-4/5 rounded" />
+                    </div>
+                  ) : (
+                    <div className={`prose prose-sm max-w-none whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-zinc-700${proposalLoading ? " ai-caret" : ""}`}>
+                      {proposal}
+                    </div>
+                  )}
                 </section>
               )}
 
-              {nudge && (
-                <section className="rounded-lg border border-zinc-200 bg-white p-6">
+              {(nudge !== null || nudgeLoading) && (
+                <section className="animate-fade-up rounded-lg border border-zinc-200 bg-white p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Follow-Up Nudge</h2>
-                    <button onClick={() => copyToClipboard(nudge)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                    {!nudgeLoading && nudge && (
+                      <button onClick={() => copyToClipboard(nudge)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                    )}
                   </div>
-                  <div className="prose prose-sm max-w-none text-zinc-700 whitespace-pre-wrap bg-zinc-50 rounded-lg p-4">{nudge}</div>
+                  {nudgeLoading && nudge === null ? (
+                    <div className="space-y-2" aria-busy="true">
+                      <div className="ai-shimmer h-3 w-1/2 rounded" />
+                      <div className="ai-shimmer h-3 w-11/12 rounded" />
+                    </div>
+                  ) : (
+                    <div className={`prose prose-sm max-w-none whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-zinc-700${nudgeLoading ? " ai-caret" : ""}`}>
+                      {nudge}
+                    </div>
+                  )}
                 </section>
               )}
             </div>

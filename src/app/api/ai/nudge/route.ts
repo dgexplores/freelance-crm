@@ -1,4 +1,4 @@
-import { generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
+import { streamFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 import { aiErrorResponse } from "@/lib/ai/http";
 import { getUser } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
@@ -25,10 +25,18 @@ export async function POST(request: Request) {
     } catch {
       // fall through to validation below
     }
-    if (!dealId) throw new Error("Missing dealId in request body.");
+    if (!dealId) {
+      return Response.json({ error: "Missing dealId in request body." }, { status: 400 });
+    }
 
-    const nudge = await generateFollowUpNudge(user.id, dealId, days);
-    return Response.json(nudge);
+    const stream = await streamFollowUpNudge(user.id, dealId, days);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (err) {
     return aiErrorResponse(err);
   }

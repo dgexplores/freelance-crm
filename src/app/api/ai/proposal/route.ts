@@ -1,4 +1,4 @@
-import { generateProposalDraft } from "@/lib/ai/proposal";
+import { streamProposalDraft } from "@/lib/ai/proposal";
 import { aiErrorResponse, readDealId } from "@/lib/ai/http";
 import { getUser } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
@@ -16,8 +16,14 @@ export async function POST(request: Request) {
   try {
     rateLimit(`ai:proposal:${user.id}`, RATE_LIMIT);
     const dealId = await readDealId(request);
-    const proposal = await generateProposalDraft(user.id, dealId);
-    return Response.json({ dealId, proposal });
+    const stream = await streamProposalDraft(user.id, dealId);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (err) {
     return aiErrorResponse(err);
   }

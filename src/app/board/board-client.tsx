@@ -122,10 +122,10 @@ function MoveButtons({ deal }: { deal: DealCard }) {
   );
 }
 
-function DealCard({ deal }: { deal: DealCard }) {
+function DealCard({ deal, index }: { deal: DealCard; index: number }) {
   return (
-    <Link href={`/board/${deal.id}`} className="block">
-      <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow">
+    <Link href={`/board/${deal.id}`} className="animate-fade-up block" style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}>
+      <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
         <div className="mb-1 flex items-start justify-between gap-2">
           <h3 className="text-sm font-semibold text-zinc-900">{deal.title}</h3>
           <span
@@ -241,7 +241,7 @@ export function BoardClient(props: {
                 {deals.length === 0 ? (
                   <p className="p-2 text-center text-xs text-zinc-400">Empty</p>
                 ) : (
-                  deals.map((deal) => <DealCard key={deal.id} deal={deal} />)
+                  deals.map((deal, i) => <DealCard key={deal.id} deal={deal} index={i} />)
                 )}
               </div>
             </section>

@@ -1,10 +1,11 @@
-import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
+import { AiUnavailableError, generateTextWithRetry, openGeminiStream } from "@/lib/ai/gemini";
 import {
   NUDGE_STAGES,
   formatEmails,
   idleDays,
   isStaleDeal,
   loadDealContext,
+  type DealContext,
 } from "@/lib/ai/context";
 import type { Deal } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -73,13 +74,44 @@ export async function generateFollowUpNudge(
   days: number = DEFAULT_STALE_DAYS,
 ): Promise<FollowUpNudge> {
   const ctx = await loadDealContext(userId, dealId);
+  assertNudgeReady(ctx, days);
+
+  try {
+    const draft = await generateTextWithRetry(buildNudgePrompt(ctx), {
+      temperature: 0.5,
+      maxOutputTokens: 700,
+    });
+    return { dealId: ctx.deal.id, title: ctx.deal.title, idleDays: idleDays(ctx), draft };
+  } catch (err) {
+    if (err instanceof AiUnavailableError) throw err;
+    throw new Error(`Nudge generation failed: ${(err as Error).message}`);
+  }
+}
+
+/** Streaming variant — same validation, tokens flow as they are generated. */
+export async function streamFollowUpNudge(
+  userId: string,
+  dealId: string,
+  days: number = DEFAULT_STALE_DAYS,
+): Promise<ReadableStream<Uint8Array>> {
+  const ctx = await loadDealContext(userId, dealId);
+  assertNudgeReady(ctx, days);
+  return openGeminiStream(buildNudgePrompt(ctx), {
+    temperature: 0.5,
+    maxOutputTokens: 700,
+  });
+}
+
+function assertNudgeReady(ctx: DealContext, days: number): void {
   if (!isStaleDeal(ctx, days)) {
     throw new ConflictError(
       `Deal "${ctx.deal.title}" is not stale (stage ${ctx.deal.stage}, ${idleDays(ctx)}d idle; needs ${days}d in ${NUDGE_STAGES.join("/")}).`,
     );
   }
+}
 
-  const prompt = `You are the assistant of a solo freelancer. The prospect went quiet. Write ONE short, human follow-up email draft that re-opens the conversation without pressure.
+function buildNudgePrompt(ctx: DealContext): string {
+  return `You are the assistant of a solo freelancer. The prospect went quiet. Write ONE short, human follow-up email draft that re-opens the conversation without pressure.
 
 # The freelancer
 Name: ${ctx.user.name ?? ctx.user.email}
@@ -102,15 +134,4 @@ ${formatEmails(ctx.emails, 4) || "(none)"}
 Subject: <one line>
 Draft:
 <2-4 sentence email body. Reference something specific from the real thread. Ask a single low-friction question. Do not apologize repeatedly. No fluff.>`;
-
-  try {
-    const draft = await generateTextWithRetry(prompt, {
-      temperature: 0.5,
-      maxOutputTokens: 700,
-    });
-    return { dealId: ctx.deal.id, title: ctx.deal.title, idleDays: idleDays(ctx), draft };
-  } catch (err) {
-    if (err instanceof AiUnavailableError) throw err;
-    throw new Error(`Nudge generation failed: ${(err as Error).message}`);
-  }
 }

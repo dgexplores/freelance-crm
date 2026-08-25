@@ -107,3 +107,82 @@ export async function generateTextWithRetry(
     retryOn: isTransientGeminiError,
   });
 }
+
+/**
+ * Open a streaming generation against `streamGenerateContent?alt=sse` and
+ * return a plain-text byte stream (SSE framing stripped server-side).
+ *
+ * Errors thrown here always happen BEFORE any bytes reach the client, so
+ * route handlers can map them to normal JSON error responses.
+ * Single attempt by design: once bytes flow, retrying would duplicate output.
+ */
+export async function openGeminiStream(
+  prompt: string,
+  options: GenerateTextOptions = {},
+): Promise<ReadableStream<Uint8Array>> {
+  const apiKey = process.env["GEMINI_API_KEY"];
+  if (!apiKey) throw new AiUnavailableError();
+
+  const model = options.model ?? DEFAULT_GEMINI_MODEL;
+  const url = `${GEMINI_API_BASE}/models/${model}:streamGenerateContent?alt=sse`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: options.temperature ?? 0.7,
+          maxOutputTokens: options.maxOutputTokens ?? 4096,
+        },
+      }),
+    });
+  } catch (err) {
+    // Network failure before any output — safe to surface as upstream error.
+    throw new GeminiApiError(err instanceof Error ? err.message : String(err), 502);
+  }
+
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new GeminiApiError(detail.slice(0, 500) || res.statusText, res.status);
+  }
+
+  return res.body.pipeThrough(sseToPlainText());
+}
+
+/** Convert Gemini's SSE frames into raw text chunks for the client. */
+function sseToPlainText(): TransformStream<Uint8Array, Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const json = JSON.parse(payload) as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          const text =
+            json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+          if (text) controller.enqueue(encoder.encode(text));
+        } catch {
+          // Malformed frame — skip it rather than corrupting the stream.
+        }
+      }
+    },
+  });
+}

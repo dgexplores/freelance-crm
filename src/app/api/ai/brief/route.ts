@@ -1,4 +1,4 @@
-import { generateDealBrief } from "@/lib/ai/brief";
+import { streamDealBrief } from "@/lib/ai/brief";
 import { aiErrorResponse, readDealId } from "@/lib/ai/http";
 import { getUser } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
@@ -17,8 +17,16 @@ export async function POST(request: Request) {
   try {
     rateLimit(`ai:brief:${user.id}`, RATE_LIMIT);
     const dealId = await readDealId(request);
-    const brief = await generateDealBrief(user.id, dealId);
-    return Response.json({ dealId, brief });
+    // All validation errors throw before any bytes reach the client, so
+    // they map to normal JSON responses via aiErrorResponse.
+    const stream = await streamDealBrief(user.id, dealId);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (err) {
     return aiErrorResponse(err);
   }

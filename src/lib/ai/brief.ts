@@ -1,5 +1,5 @@
-import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
-import { loadDealContext, formatEmails } from "@/lib/ai/context";
+import { AiUnavailableError, generateTextWithRetry, openGeminiStream } from "@/lib/ai/gemini";
+import { loadDealContext, formatEmails, type DealContext } from "@/lib/ai/context";
 import { ConflictError } from "@/lib/errors";
 
 /**
@@ -8,13 +8,42 @@ import { ConflictError } from "@/lib/errors";
  */
 export async function generateDealBrief(userId: string, dealId: string): Promise<string> {
   const ctx = await loadDealContext(userId, dealId);
+  assertBriefReady(ctx);
+  const prompt = buildBriefPrompt(ctx);
+  try {
+    return await generateTextWithRetry(prompt, {
+      temperature: 0.4,
+      maxOutputTokens: 1024,
+    });
+  } catch (err) {
+    if (err instanceof AiUnavailableError) throw err;
+    throw new Error(`Brief generation failed: ${(err as Error).message}`);
+  }
+}
+
+/** Streaming variant — same validation, tokens flow as they are generated. */
+export async function streamDealBrief(
+  userId: string,
+  dealId: string,
+): Promise<ReadableStream<Uint8Array>> {
+  const ctx = await loadDealContext(userId, dealId);
+  assertBriefReady(ctx);
+  return openGeminiStream(buildBriefPrompt(ctx), {
+    temperature: 0.4,
+    maxOutputTokens: 1024,
+  });
+}
+
+function assertBriefReady(ctx: DealContext): void {
   if (!ctx.user.rateCard) {
     throw new ConflictError(
       "No rate card on your account yet — add one (markdown: rates, services, terms) to get useful briefs.",
     );
   }
+}
 
-  const prompt = `You are the assistant of a solo freelancer. Write a concise pre-call brief in Markdown.
+function buildBriefPrompt(ctx: DealContext): string {
+  return `You are the assistant of a solo freelancer. Write a concise pre-call brief in Markdown.
 
 # The freelancer
 Name: ${ctx.user.name ?? ctx.user.email}
@@ -43,14 +72,4 @@ ${formatEmails(ctx.emails) || "(none)"}
 3. **Where the deal stands** — stage, value, and the open question.
 4. **What to confirm** — 2-3 concrete things to confirm on the call.
 5. **Suggested talking points** — 2-3 bullets tied to their rate card.`;
-
-  try {
-    return await generateTextWithRetry(prompt, {
-      temperature: 0.4,
-      maxOutputTokens: 1024,
-    });
-  } catch (err) {
-    if (err instanceof AiUnavailableError) throw err;
-    throw new Error(`Brief generation failed: ${(err as Error).message}`);
-  }
 }
