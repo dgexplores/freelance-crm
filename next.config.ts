@@ -6,8 +6,9 @@ async function getSentryConfig() {
 }
 
 const nextConfig: NextConfig = {
-  // Emits .next/standalone for the Dockerfile; harmless on Vercel.
-  output: "standalone",
+  // Standalone output powers the Dockerfile. Vercel manages its own output
+  // format — forcing standalone there breaks NFT tracing.
+  ...(process.env["VERCEL"] ? {} : { output: "standalone" as const }),
   async headers() {
     return [
       {

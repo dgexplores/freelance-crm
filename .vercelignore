@@ -4,3 +4,7 @@ tests
 coverage
 backups
 *.dump.gz
+.env
+.env.*
+!.env.example
+.env.local
