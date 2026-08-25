@@ -1,6 +1,18 @@
-import { auth } from "@/lib/auth";
+import { getSessionCookie } from "better-auth/cookies";
+import { NextResponse, type NextRequest } from "next/server";
 
-export const middleware = auth;
+/**
+ * Lightweight gate: presence of a session cookie decides page access.
+ * Real session verification happens server-side (RSC + server actions),
+ * so a forged cookie gets pages that fail their data loads, not data.
+ */
+export function middleware(request: NextRequest) {
+  const hasSession = Boolean(getSessionCookie(request));
+  if (!hasSession) {
+    return NextResponse.redirect(new URL("/sign-in", request.url));
+  }
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: ["/board/:path*", "/settings/:path*"],
