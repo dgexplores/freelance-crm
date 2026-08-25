@@ -1,8 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCorners,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import type { CSSProperties, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { moveDealAction, importGmailAction } from "@/app/board/actions";
 
@@ -122,36 +135,101 @@ function MoveButtons({ deal }: { deal: DealCard }) {
   );
 }
 
-function DealCard({ deal, index }: { deal: DealCard; index: number }) {
+function CardFace({ deal }: { deal: DealCard }) {
   return (
-    <Link href={`/board/${deal.id}`} className="animate-fade-up block" style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}>
-      <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-        <div className="mb-1 flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-zinc-900">{deal.title}</h3>
-          <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STAGE_COLORS[deal.stage as (typeof STAGES)[number]] ?? STAGE_COLORS.INBOX}`}
-          >
-            {deal.stage}
-          </span>
-        </div>
-        <p className="text-xs text-zinc-600">
-          {deal.contact.name ? `${deal.contact.name} · ` : ""}
-          <span className="text-zinc-500">{deal.contact.email}</span>
-        </p>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-700">
-          {deal.whyInPipeline ?? "No evidence recorded."}
-        </p>
-        {deal.latestEmail && (
-          <p className="mt-2 text-[11px] text-zinc-400">
-            Last: {deal.latestEmail.subject} · {fmtDate(deal.latestEmail.receivedAt)}
-          </p>
-        )}
-        <p className="mt-0.5 text-[11px] text-zinc-400">
-          Last contact: {fmtDate(deal.contact.lastContact)}
-        </p>
-        <MoveButtons deal={deal} />
+    <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-900">{deal.title}</h3>
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STAGE_COLORS[deal.stage as (typeof STAGES)[number]] ?? STAGE_COLORS.INBOX}`}
+        >
+          {deal.stage}
+        </span>
       </div>
-    </Link>
+      <p className="text-xs text-zinc-600">
+        {deal.contact.name ? `${deal.contact.name} · ` : ""}
+        <span className="text-zinc-500">{deal.contact.email}</span>
+      </p>
+      <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-700">
+        {deal.whyInPipeline ?? "No evidence recorded."}
+      </p>
+      {deal.latestEmail && (
+        <p className="mt-2 text-[11px] text-zinc-400">
+          Last: {deal.latestEmail.subject} · {fmtDate(deal.latestEmail.receivedAt)}
+        </p>
+      )}
+      <p className="mt-0.5 text-[11px] text-zinc-400">
+        Last contact: {fmtDate(deal.contact.lastContact)}
+      </p>
+    </div>
+  );
+}
+
+/** Wraps a card with drag listeners. Click-through to the link still works:
+ * PointerSensor needs 6px of movement before a drag activates. */
+function DraggableDealCard({
+  deal,
+  index,
+  disabled,
+}: {
+  deal: DealCard;
+  index: number;
+  disabled: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: deal.id,
+    disabled,
+  });
+
+  const style: CSSProperties | undefined = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ ...style, animationDelay: `${Math.min(index * 40, 320)}ms` }}
+      className={`animate-fade-up ${isDragging ? "z-20 opacity-60" : ""}`}
+    >
+      <Link href={`/board/${deal.id}`} className="block touch-none">
+        <CardFace deal={deal} />
+      </Link>
+    </div>
+  );
+}
+
+function Column({
+  stage,
+  count,
+  children,
+}: {
+  stage: (typeof STAGES)[number];
+  count: number;
+  children: ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `col:${stage}` });
+  return (
+    <section className="flex flex-col">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">{stage}</h2>
+        <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600">
+          {count}
+        </span>
+      </div>
+      <p className="mb-2 text-[11px] text-zinc-400">{STAGE_NOTES[stage]}</p>
+      <div
+        ref={setNodeRef}
+        className={`flex flex-1 flex-col gap-3 rounded-lg border p-2 transition-colors ${
+          isOver
+            ? "border-zinc-900 bg-zinc-200/80"
+            : "border-zinc-200 bg-zinc-100/60"
+        }`}
+      >
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -164,10 +242,61 @@ export function BoardClient(props: {
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Local mirror of deals for optimistic drag moves; resynced from props
+  // by adjusting state during render when the server sends fresh data.
+  const [deals, setDeals] = useState(props.deals);
+  const [syncedFrom, setSyncedFrom] = useState(props.deals);
+  const [moving, setMoving] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  if (props.deals !== syncedFrom) {
+    setSyncedFrom(props.deals);
+    setDeals(props.deals);
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const applyMove = useCallback(
+    async (dealId: string, toStage: string) => {
+      const current = deals.find((d) => d.id === dealId);
+      if (!current || current.stage === toStage) return;
+
+      setMoving(true);
+      // Optimistic: move locally now.
+      setDeals((prev) =>
+        prev.map((d) => (d.id === dealId ? { ...d, stage: toStage } : d)),
+      );
+      const res = await moveDealAction(dealId, toStage);
+      if (!res.ok) {
+        setError(res.message);
+        router.refresh(); // snap back to server truth
+      }
+      setMoving(false);
+    },
+    [deals, router],
+  );
+
+  function onDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    setActiveId(null);
+    const overId = event.over?.id;
+    if (!overId || typeof overId !== "string") return;
+    const toStage = overId.replace(/^col:/, "");
+    if (!STAGES.includes(toStage as (typeof STAGES)[number])) return;
+    void applyMove(String(event.active.id), toStage);
+  }
 
   async function importMail() {
     setBusy(true);
+    setError(null);
     const res = await importGmailAction();
     setBusy(false);
     setStatus(res.message);
@@ -180,8 +309,10 @@ export function BoardClient(props: {
 
   const columns = STAGES.map((stage) => ({
     stage,
-    deals: props.deals.filter((d) => d.stage === stage),
+    deals: deals.filter((d) => d.stage === stage),
   }));
+
+  const activeDeal = activeId ? deals.find((d) => d.id === activeId) ?? null : null;
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -212,7 +343,11 @@ export function BoardClient(props: {
             </button>
           </div>
         </div>
-        {status && <p className="text-xs text-zinc-600 mb-4">{status}</p>}
+        {(status || error) && (
+          <p className={`mb-4 text-xs ${error ? "text-rose-600" : "text-zinc-600"}`}>
+            {error ?? status}
+          </p>
+        )}
         <p className="text-[11px] text-zinc-400 mb-6">
           {props.gmailSyncStartedAt
             ? `Forward-only sync boundary: ${new Date(props.gmailSyncStartedAt).toLocaleString()} — only newer mail is imported.`
@@ -223,30 +358,35 @@ export function BoardClient(props: {
       </div>
 
       <main className="mx-auto max-w-7xl px-6 pb-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
-          {columns.map(({ stage, deals }) => (
-            <section key={stage} className="flex flex-col">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                  {stage}
-                </h2>
-                <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600">
-                  {deals.length}
-                </span>
-              </div>
-              <p className="mb-2 text-[11px] text-zinc-400">
-                {STAGE_NOTES[stage]}
-              </p>
-              <div className="flex flex-1 flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-100/60 p-2">
-                {deals.length === 0 ? (
-                  <p className="p-2 text-center text-xs text-zinc-400">Empty</p>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
+            {columns.map(({ stage, deals: columnDeals }) => (
+              <Column key={stage} stage={stage} count={columnDeals.length}>
+                {columnDeals.length === 0 ? (
+                  <p className="p-2 text-center text-xs text-zinc-400">
+                    {activeDeal ? "Drop here" : "Empty"}
+                  </p>
                 ) : (
-                  deals.map((deal, i) => <DealCard key={deal.id} deal={deal} index={i} />)
+                  columnDeals.map((deal, i) => (
+                    <div key={deal.id}>
+                      <DraggableDealCard deal={deal} index={i} disabled={moving} />
+                      {/* Keyboard/button fallback stays inside each card page */}
+                      <div className="-mt-2 pl-1">
+                        <MoveButtons deal={deal} />
+                      </div>
+                    </div>
+                  ))
                 )}
-              </div>
-            </section>
-          ))}
-        </div>
+              </Column>
+            ))}
+          </div>
+        </DndContext>
       </main>
     </div>
   );
