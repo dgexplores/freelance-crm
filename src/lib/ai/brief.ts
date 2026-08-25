@@ -1,5 +1,6 @@
 import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
 import { loadDealContext, formatEmails } from "@/lib/ai/context";
+import { ConflictError } from "@/lib/errors";
 
 /**
  * Pre-call brief for a deal: who the contact is, what they last said,
@@ -8,7 +9,7 @@ import { loadDealContext, formatEmails } from "@/lib/ai/context";
 export async function generateDealBrief(userId: string, dealId: string): Promise<string> {
   const ctx = await loadDealContext(userId, dealId);
   if (!ctx.user.rateCard) {
-    throw new Error(
+    throw new ConflictError(
       "No rate card on your account yet — add one (markdown: rates, services, terms) to get useful briefs.",
     );
   }

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { NotFoundError } from "@/lib/errors";
 import type { Deal, DealStage } from "@prisma/client";
 
 export const NUDGE_STAGES: DealStage[] = ["INBOX", "QUALIFIED"];
@@ -31,7 +32,7 @@ export interface DealContext {
 }
 
 /** Thrown when a deal does not exist or is not owned by the requesting user. */
-export class DealNotFoundError extends Error {
+export class DealNotFoundError extends NotFoundError {
   constructor() {
     super("Deal not found");
     this.name = "DealNotFoundError";

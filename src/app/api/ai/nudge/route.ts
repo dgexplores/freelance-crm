@@ -1,8 +1,11 @@
 import { generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 import { aiErrorResponse } from "@/lib/ai/http";
 import { getUser } from "@/lib/session";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
 export async function POST(request: Request) {
   const user = await getUser();
@@ -11,6 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    rateLimit(`ai:nudge:${user.id}`, RATE_LIMIT);
     let dealId = "";
     let days = DEFAULT_STALE_DAYS;
     try {

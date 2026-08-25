@@ -34,6 +34,14 @@ export function Nav() {
             ))}
           </div>
         </div>
+        <div className="flex h-7 items-center justify-end gap-4 border-t border-zinc-100">
+          <Link href="/privacy" className="text-[11px] text-zinc-400 hover:text-zinc-600">
+            Privacy
+          </Link>
+          <Link href="/terms" className="text-[11px] text-zinc-400 hover:text-zinc-600">
+            Terms
+          </Link>
+        </div>
       </div>
     </nav>
   );

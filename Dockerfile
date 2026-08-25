@@ -1,0 +1,41 @@
+# --- deps ---
+FROM node:22-alpine AS deps
+RUN apk add --no-cache openssl
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci --ignore-scripts && npx prisma generate
+
+# --- build ---
+FROM node:22-alpine AS builder
+RUN apk add --no-cache openssl
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# Dummy secrets satisfy env reads at build time (same pattern as CI).
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build" \
+    BETTER_AUTH_SECRET="dummy-secret-for-build-only" \
+    BETTER_AUTH_URL="http://localhost:3000" \
+    GOOGLE_CLIENT_ID="dummy" \
+    GOOGLE_CLIENT_SECRET="dummy" \
+    SENTRY_DSN=""
+RUN npm run build
+
+# --- run ---
+FROM node:22-alpine AS runner
+RUN apk add --no-cache openssl
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+USER nextjs
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+CMD ["node", "server.js"]

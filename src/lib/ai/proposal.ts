@@ -1,5 +1,6 @@
 import { AiUnavailableError, generateTextWithRetry } from "@/lib/ai/gemini";
 import { formatEmails, loadDealContext } from "@/lib/ai/context";
+import { ConflictError } from "@/lib/errors";
 
 /**
  * Proposal draft for a PROPOSAL-stage deal, written from the user's rate
@@ -8,12 +9,12 @@ import { formatEmails, loadDealContext } from "@/lib/ai/context";
 export async function generateProposalDraft(userId: string, dealId: string): Promise<string> {
   const ctx = await loadDealContext(userId, dealId);
   if (ctx.deal.stage !== "PROPOSAL") {
-    throw new Error(
+    throw new ConflictError(
       `Deal "${ctx.deal.title}" is in stage ${ctx.deal.stage}; proposals are only generated for PROPOSAL-stage deals.`,
     );
   }
   if (!ctx.user.rateCard) {
-    throw new Error(
+    throw new ConflictError(
       "No rate card on your account yet — add one (markdown: rates, services, terms) to draft proposals.",
     );
   }

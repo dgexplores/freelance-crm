@@ -1,38 +1,52 @@
-import { AiUnavailableError } from "@/lib/ai/gemini";
+import { AppError, BadRequestError, NotFoundError } from "@/lib/errors";
+import { AiUnavailableError, GeminiApiError } from "@/lib/ai/gemini";
+import { RateLimitError } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 /**
  * Map any error thrown by the AI service layer to a JSON Response.
- * Missing key => 503 (graceful, never crash). Upstream failures => 502.
- * Domain errors (bad stage, not stale, missing rate card) => 409.
- * Not found => 404.
+ * Mapping is instanceof-based via the typed error hierarchy — message
+ * strings are never parsed.
  */
 export function aiErrorResponse(err: unknown): Response {
+  if (err instanceof RateLimitError) {
+    return Response.json(
+      { error: err.message },
+      { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
+    );
+  }
+
   if (err instanceof AiUnavailableError) {
     return Response.json(
       {
-        error: "AI is not configured. Set GEMINI_API_KEY to enable AI features.",
+        error:
+          "AI is not configured. Set GEMINI_API_KEY to enable AI features.",
       },
       { status: 503 },
     );
   }
 
-  const message = err instanceof Error ? err.message : String(err);
-
-  if (message.includes("dealId") || message === "Deal not found") {
-    return Response.json({ error: message }, { status: message === "Deal not found" ? 404 : 400 });
-  }
-  if (
-    message.includes("rate card") ||
-    message.includes("not stale") ||
-    message.includes("only generated for PROPOSAL")
-  ) {
-    return Response.json({ error: message }, { status: 409 });
-  }
-  if (message.startsWith("Gemini API error")) {
-    return Response.json({ error: message }, { status: 502 });
+  if (err instanceof GeminiApiError) {
+    logger.error("Gemini upstream failure", { status: err.status, error: err.message });
+    return Response.json(
+      { error: "AI provider request failed. Try again shortly." },
+      { status: 502 },
+    );
   }
 
-  return Response.json({ error: message }, { status: 500 });
+  // Known domain errors carry their own status + safe user-facing message.
+  if (err instanceof AppError) {
+    return Response.json({ error: err.message, code: err.code }, { status: err.status });
+  }
+
+  // Unknown errors: log full detail server-side, return a generic body so
+  // internals never leak to clients.
+  const detail = err instanceof Error ? err.stack ?? err.message : String(err);
+  logger.error("Unhandled error in AI route", { error: detail });
+  return Response.json(
+    { error: "Something went wrong. Please try again.", code: "internal" },
+    { status: 500 },
+  );
 }
 
 export async function readDealId(request: Request): Promise<string> {
@@ -40,12 +54,15 @@ export async function readDealId(request: Request): Promise<string> {
   try {
     body = await request.json();
   } catch {
-    throw new Error("Expected a JSON body with a dealId.");
+    throw new BadRequestError("Expected a JSON body with a dealId.");
   }
   const dealId =
     body && typeof body === "object" && "dealId" in body
       ? String((body as { dealId: unknown }).dealId)
       : "";
-  if (!dealId) throw new Error("Missing dealId in request body.");
+  if (!dealId) throw new BadRequestError("Missing dealId in request body.");
   return dealId;
 }
+
+// Re-export for route handlers that want explicit not-found semantics.
+export { NotFoundError };

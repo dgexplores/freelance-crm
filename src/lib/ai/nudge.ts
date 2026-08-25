@@ -8,6 +8,7 @@ import {
 } from "@/lib/ai/context";
 import type { Deal } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ConflictError } from "@/lib/errors";
 
 export const DEFAULT_STALE_DAYS = 5;
 
@@ -73,7 +74,7 @@ export async function generateFollowUpNudge(
 ): Promise<FollowUpNudge> {
   const ctx = await loadDealContext(userId, dealId);
   if (!isStaleDeal(ctx, days)) {
-    throw new Error(
+    throw new ConflictError(
       `Deal "${ctx.deal.title}" is not stale (stage ${ctx.deal.stage}, ${idleDays(ctx)}d idle; needs ${days}d in ${NUDGE_STAGES.join("/")}).`,
     );
   }

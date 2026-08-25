@@ -6,6 +6,8 @@ async function getSentryConfig() {
 }
 
 const nextConfig: NextConfig = {
+  // Emits .next/standalone for the Dockerfile; harmless on Vercel.
+  output: "standalone",
   async headers() {
     return [
       {

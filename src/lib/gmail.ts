@@ -38,6 +38,14 @@ export class GmailImportError extends Error {
  *    no message is ever skipped between imports.
  */
 export async function getGmailAccessToken(userId: string): Promise<string> {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    // Fail loudly and clearly instead of sending a doomed token refresh.
+    throw new GmailImportError(
+      "Google OAuth is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing).",
+      500,
+    );
+  }
+
   const account = await prisma.account.findFirst({
     where: { userId, providerId: "google" },
   });
