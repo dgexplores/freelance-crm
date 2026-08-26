@@ -10,6 +10,32 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 
 ---
 
+## Status
+
+**🟢 Deployed to production:** https://freelance-crm-xi.vercel.app
+
+### Done
+- **Security hardening** — IDOR closed (session + owner scoping on every AI route, locked by a regression test), rate limiting on AI endpoints, typed error hierarchy, sanitized errors, Gemini key moved to headers
+- **Reliability** — retry with backoff on Gmail/Gemini failures, atomic per-message DB staging, forward-sync boundary race fixed, DB hot-path indexes, session-less cron scheduler that actually works
+- **Product UX** — drag-and-drop kanban with optimistic moves, streaming AI output (shimmer → typewriter → result card), motion design with `prefers-reduced-motion` support
+- **Quality gates** — 24 unit tests + 10 Postgres integration tests run in CI on every push; lint + typecheck + production build all green
+- **Ops** — Dockerfile + prod compose stack, `vercel.json` cron, backup + restore scripts, privacy policy + terms pages
+- **Infrastructure** — Supabase Postgres provisioned and migrated; Vercel project deployed with auth/cron/DB secrets wired
+
+### Left
+| Item | Who |
+|------|-----|
+| Google OAuth keys (`GOOGLE_CLIENT_ID`/`SECRET`) → Vercel env | Owner |
+| Gemini key (`GEMINI_API_KEY`) → Vercel env | Owner |
+| Redeploy after keys → full end-to-end loop | Either |
+| Stripe billing + AI usage metering | Deferred by owner |
+| Persist AI outputs to DB · onboarding checklist · Redis-backed limits · Playwright E2E · HTML email extraction | Backlog |
+| `gmail.readonly` restricted-scope strategy before public launch (CASA assessment vs waitlist-first) | Decision needed |
+
+Full delivery record: [FREELANCE-CRM-SESSION-LOG.md](./FREELANCE-CRM-SESSION-LOG.md).
+
+---
+
 ## Who This Is For
 
 | You | This Helps You |
