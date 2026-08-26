@@ -45,18 +45,19 @@ MVP skeleton (~3.4K LOC): Next.js 16 + React 19 + Prisma/Postgres + Better Auth 
 
 ## Current blocker ⚠️
 
-**Vercel production build frozen at "Building…" (40+ min, zero logs)** while identical build passes on GitHub CI in 2.5 min. Zombie-build purge performed (4 deployments removed). Needs one human look at the dashboard:
-`https://vercel.com/deepaklearn7878-6255s-projects/freelance-crm`
+**RESOLVED.** The original Vercel project's build queue was corrupted (every deployment hung at UNKNOWN with no logs, any deploy method, while a probe project deployed instantly). Fix: deleted + recreated the project via CLI — production deployed **Ready in 1m**.
 
-Fallback if unresolved: ship via the committed Dockerfile to any VPS.
+### LIVE: https://freelance-crm-xi.vercel.app
+- `/api/health` → 200 `{database:true}` (Supabase SG connected)
+- Auth gate redirecting (`/board` → sign-in), legal pages serving
+- `BETTER_AUTH_URL` set to production domain (OAuth callbacks ready)
 
 ## What's left
 
 ### To go live (user input required, ~10 min)
-1. Un-stick/redeploy on Vercel dashboard (or choose Docker-on-VPS path)
-2. Google Cloud OAuth client → `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in Vercel (redirect URI: `<domain>/api/auth/callback/google`)
-3. Gemini API key → `GEMINI_API_KEY` in Vercel
-4. Redeploy + first real end-to-end loop (sign in → import → brief)
+1. Google Cloud OAuth client → `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in Vercel env (redirect URI: `https://freelance-crm-xi.vercel.app/api/auth/callback/google`)
+2. Gemini API key → `GEMINI_API_KEY` in Vercel env → redeploy (CLI or dashboard)
+3. Optional: create a Vercel **dashboard token** (vercel.com/account/tokens) → set as GitHub `VERCEL_TOKEN` secret to re-arm CI auto-deploys (CLI session tokens are app-scoped and rejected for CI)
 
 ### Backlog (code, prioritized)
 1. Persist AI outputs to DB (regeneration costs tokens today)

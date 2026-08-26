@@ -444,7 +444,9 @@ P0 (done):        IDOR · cron auth · typecheck · CI deploy guards · .env.exa
 P1 (done):        key-in-header · transactions · backoff · boundary race · indexes · data fixes
 P2 (done):        typed errors · rate limits · streaming AI + motion UI · dnd board
                   integration tests · legal pages · Docker stack · restore script
-P3 (open):        Vercel build un-stick · Google OAuth + Gemini keys → first live deploy
+Deploy (done):    Supabase Postgres provisioned · Vercel production LIVE
+                  https://freelance-crm-xi.vercel.app
+Remaining keys:   GOOGLE_CLIENT_ID/SECRET + GEMINI_API_KEY → then OAuth works end-to-end
 Backlog:          Stripe · persist AI outputs · onboarding · Redis limits · E2E · CASA decision
 ```
 
