@@ -67,3 +67,6 @@ Fallback if unresolved: ship via the committed Dockerfile to any VPS.
 6. HTML-only email body extraction
 7. Legal pages: swap placeholder contact info for real entity details
 8. Before public launch: `gmail.readonly` restricted-scope strategy (CASA Tier 2 assessment vs waitlist-first launch)
+
+---
+Update 2026-08-26: Vercel CI deploy pipeline armed (token + org/project secrets set). Frozen CLI deployments purged; production deploy now flows through GitHub Actions.
