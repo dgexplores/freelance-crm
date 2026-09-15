@@ -15,13 +15,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-// Mock next-auth
-vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: null, status: "unauthenticated" }),
-  signIn: vi.fn(),
-  signOut: vi.fn(),
-}));
-
 // Mock better-auth
 vi.mock("@/lib/auth-client", () => ({
   authClient: {
@@ -46,6 +39,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     contact: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -57,9 +51,12 @@ vi.mock("@/lib/prisma", () => ({
     fact: {
       createMany: vi.fn(),
       count: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
     task: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -75,22 +72,23 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/app/board/actions", () => ({
   importGmailAction: vi.fn(),
   moveDealAction: vi.fn(),
+  updateDealAction: vi.fn(),
+  updateContactAction: vi.fn(),
+  setFactAppliedAction: vi.fn(),
+  scheduleStaleFollowUpsAction: vi.fn(),
+  DEAL_STAGES: ["INBOX", "QUALIFIED", "PROPOSAL", "WON", "LOST"],
 }));
 
 vi.mock("@/app/settings/actions", () => ({
   updateRateCardAction: vi.fn(),
 }));
 
-vi.mock("@/app/board/[dealId]/actions", () => ({
-  generateBriefAction: vi.fn(),
-  generateProposalAction: vi.fn(),
-  generateNudgeAction: vi.fn(),
-}));
-
 vi.mock("@/app/board/[dealId]/task-actions", () => ({
   createTaskAction: vi.fn(),
   completeTaskAction: vi.fn(),
+  reopenTaskAction: vi.fn(),
   deleteTaskAction: vi.fn(),
+  TASK_KINDS: ["follow_up", "brief", "proposal"],
 }));
 
 // Suppress console.error in tests unless explicitly testing errors

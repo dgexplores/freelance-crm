@@ -162,27 +162,42 @@ function sseToPlainText(): TransformStream<Uint8Array, Uint8Array> {
   const encoder = new TextEncoder();
   let buffer = "";
 
+  /** Emit the text carried by a single SSE `data:` line, if any. */
+  const emitLine = (
+    rawLine: string,
+    controller: TransformStreamDefaultController<Uint8Array>,
+  ): void => {
+    const trimmed = rawLine.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") return;
+    try {
+      const json = JSON.parse(payload) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const text =
+        json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+      if (text) controller.enqueue(encoder.encode(text));
+    } catch {
+      // Malformed frame — skip it rather than corrupting the stream.
+    }
+  };
+
   return new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       buffer += decoder.decode(chunk, { stream: true });
       const lines = buffer.split("\n");
+      // Hold the trailing partial line until its newline arrives.
       buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const payload = trimmed.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        try {
-          const json = JSON.parse(payload) as {
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
-          const text =
-            json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-          if (text) controller.enqueue(encoder.encode(text));
-        } catch {
-          // Malformed frame — skip it rather than corrupting the stream.
-        }
-      }
+      for (const line of lines) emitLine(line, controller);
+    },
+    flush(controller) {
+      // The upstream response can end without a trailing newline. Without this,
+      // that final frame stays in the buffer and the generation is silently
+      // truncated by one chunk.
+      buffer += decoder.decode();
+      if (buffer) emitLine(buffer, controller);
+      buffer = "";
     },
   });
 }

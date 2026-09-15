@@ -1,7 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  updateDealAction,
+  updateContactAction,
+  setFactAppliedAction,
+} from "@/app/board/actions";
+import {
+  createTaskAction,
+  completeTaskAction,
+  reopenTaskAction,
+  deleteTaskAction,
+  TASK_KINDS,
+  type TaskKind,
+} from "./task-actions";
 
 type Deal = {
   id: string;
@@ -66,6 +80,15 @@ const STAGE_COLORS: Record<string, string> = {
   LOST: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+// Tailwind's scanner is static: it only generates classes it can find as
+// literal strings. A template like `bg-${x}-50` is never emitted, so the badge
+// rendered unstyled. Keep every variant written out in full.
+const DIRECTION_COLORS: Record<string, string> = {
+  INBOUND: "bg-sky-50 text-sky-700",
+  OUTBOUND: "bg-violet-50 text-violet-700",
+};
+const DIRECTION_COLOR_FALLBACK = "bg-zinc-100 text-zinc-700";
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -75,6 +98,26 @@ function fmtDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
+
+/** yyyy-mm-dd for <input type="date">, in the viewer's local time. */
+function toDateInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function tomorrowAsInputValue(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return toDateInputValue(d);
+}
+
+/** Small shared input styling so the edit forms stay visually consistent. */
+const INPUT_CLASS =
+  "w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
+const SECONDARY_BUTTON_CLASS =
+  "rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-40";
+const PRIMARY_BUTTON_CLASS =
+  "rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-40";
 
 /**
  * POST to a streaming AI endpoint and forward plain-text chunks as they
@@ -128,6 +171,106 @@ export function DealDetailClient(props: {
   const [nudge, setNudge] = useState<string | null>(null);
   const [nudgeLoading, setNudgeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  // Deal / contact editing. The importer only ever infers these fields, so
+  // without a manual path `value` stays null forever and the AI prompts keep
+  // reading "Estimated value: unknown".
+  const [editingDeal, setEditingDeal] = useState(false);
+  const [dealTitle, setDealTitle] = useState(deal.title);
+  const [dealValue, setDealValue] = useState(deal.value === null ? "" : String(deal.value));
+  const [lostReason, setLostReason] = useState(deal.lostReason ?? "");
+
+  const [editingContact, setEditingContact] = useState(false);
+  const [contactName, setContactName] = useState(deal.contact.name ?? "");
+  const [contactCompany, setContactCompany] = useState(deal.contact.company ?? "");
+  const [contactLinkedin, setContactLinkedin] = useState(deal.contact.linkedinUrl ?? "");
+
+  // New-task form.
+  const [taskKind, setTaskKind] = useState<TaskKind>("follow_up");
+  const [taskDue, setTaskDue] = useState(tomorrowAsInputValue);
+  const [taskReason, setTaskReason] = useState("");
+
+  /**
+   * Run a server action, surface its message, and refresh the server data so
+   * the page reflects the write without a manual reload.
+   */
+  async function run(
+    fn: () => Promise<{ ok: boolean; message: string }>,
+    opts: { refresh?: boolean; successIsNotice?: boolean } = {},
+  ): Promise<boolean> {
+    const { refresh = true, successIsNotice = false } = opts;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fn();
+      if (res.ok) {
+        if (successIsNotice) {
+          setNotice(res.message);
+          setTimeout(() => setNotice(null), 2500);
+        }
+        if (refresh) router.refresh();
+        return true;
+      }
+      setError(res.message);
+      return false;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDeal() {
+    const parsed = dealValue.trim() === "" ? null : Number(dealValue);
+    if (parsed !== null && !Number.isFinite(parsed)) {
+      setError("Estimated value must be a number.");
+      return;
+    }
+    const ok = await run(
+      () =>
+        updateDealAction(deal.id, {
+          title: dealTitle,
+          value: parsed,
+          ...(deal.stage === "LOST" ? { lostReason } : {}),
+        }),
+      { successIsNotice: true },
+    );
+    if (ok) setEditingDeal(false);
+  }
+
+  async function saveContact() {
+    const ok = await run(
+      () =>
+        updateContactAction(deal.contact.id, {
+          name: contactName,
+          company: contactCompany,
+          linkedinUrl: contactLinkedin,
+        }),
+      { successIsNotice: true },
+    );
+    if (ok) setEditingContact(false);
+  }
+
+  async function addTask() {
+    const due = new Date(`${taskDue}T09:00:00`);
+    if (Number.isNaN(due.getTime())) {
+      setError("Pick a valid due date.");
+      return;
+    }
+    const ok = await run(
+      () => createTaskAction(deal.id, taskKind, due, taskReason),
+      { successIsNotice: true },
+    );
+    if (ok) {
+      setTaskReason("");
+      setTaskDue(tomorrowAsInputValue());
+    }
+  }
 
   async function handleGenerateBrief() {
     if (!props.hasRateCard) {
@@ -195,9 +338,13 @@ export function DealDetailClient(props: {
   }
 
   function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text);
-    setError("Copied to clipboard");
-    setTimeout(() => setError(null), 2000);
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setNotice("Copied to clipboard.");
+        setTimeout(() => setNotice(null), 2000);
+      },
+      () => setError("Could not copy — your browser blocked clipboard access."),
+    );
   }
 
   return (
@@ -244,6 +391,12 @@ export function DealDetailClient(props: {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-6">
+        {notice && (
+          <div className="mb-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {notice}
+          </div>
+        )}
+
         {error && (
           <div className="mb-6 rounded-md bg-rose-50 px-4 py-3 text-sm text-rose-700 flex items-center justify-between">
             <span>{error}</span>
@@ -255,29 +408,84 @@ export function DealDetailClient(props: {
           <div className="grid gap-6 md:grid-cols-3">
             <div className="md:col-span-2 space-y-6">
               <section className="rounded-lg border border-zinc-200 bg-white p-6">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-4">Deal Details</h2>
-                <dl className="grid gap-4 sm:grid-cols-2">
-                  <dt className="text-sm text-zinc-500">Stage</dt>
-                  <dd className="text-sm font-medium text-zinc-900">{STAGE_LABELS[deal.stage] ?? deal.stage}</dd>
-                  <dt className="text-sm text-zinc-500">Estimated Value</dt>
-                  <dd className="text-sm font-medium text-zinc-900">{deal.value ? `$${deal.value.toLocaleString()}` : "Not set"}</dd>
-                  <dt className="text-sm text-zinc-500">Created</dt>
-                  <dd className="text-sm text-zinc-700">{fmtDate(deal.createdAt)}</dd>
-                  <dt className="text-sm text-zinc-500">Updated</dt>
-                  <dd className="text-sm text-zinc-700">{fmtDate(deal.updatedAt)}</dd>
-                  {deal.wonAt && (
-                    <>
-                      <dt className="text-sm text-zinc-500">Won At</dt>
-                      <dd className="text-sm text-zinc-700">{fmtDate(deal.wonAt)}</dd>
-                    </>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Deal Details</h2>
+                  {editingDeal ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingDeal(false)} disabled={busy} className={SECONDARY_BUTTON_CLASS}>
+                        Cancel
+                      </button>
+                      <button onClick={saveDeal} disabled={busy} className={PRIMARY_BUTTON_CLASS}>
+                        {busy ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setEditingDeal(true)} disabled={busy} className={SECONDARY_BUTTON_CLASS}>
+                      Edit
+                    </button>
                   )}
-                  {deal.lostReason && (
-                    <>
-                      <dt className="text-sm text-zinc-500">Lost Reason</dt>
-                      <dd className="text-sm text-zinc-700">{deal.lostReason}</dd>
-                    </>
-                  )}
-                </dl>
+                </div>
+
+                {editingDeal ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm text-zinc-500">
+                      Title
+                      <input
+                        value={dealTitle}
+                        onChange={(e) => setDealTitle(e.target.value)}
+                        className={`mt-1 ${INPUT_CLASS}`}
+                        maxLength={200}
+                      />
+                    </label>
+                    <label className="text-sm text-zinc-500">
+                      Estimated value (USD)
+                      <input
+                        value={dealValue}
+                        onChange={(e) => setDealValue(e.target.value)}
+                        inputMode="numeric"
+                        placeholder="Leave blank if unknown"
+                        className={`mt-1 ${INPUT_CLASS}`}
+                      />
+                    </label>
+                    {deal.stage === "LOST" && (
+                      <label className="text-sm text-zinc-500 sm:col-span-2">
+                        Lost reason
+                        <input
+                          value={lostReason}
+                          onChange={(e) => setLostReason(e.target.value)}
+                          className={`mt-1 ${INPUT_CLASS}`}
+                          maxLength={500}
+                        />
+                      </label>
+                    )}
+                    <p className="text-xs text-zinc-400 sm:col-span-2">
+                      Stage is changed from the board, not here.
+                    </p>
+                  </div>
+                ) : (
+                  <dl className="grid gap-4 sm:grid-cols-2">
+                    <dt className="text-sm text-zinc-500">Stage</dt>
+                    <dd className="text-sm font-medium text-zinc-900">{STAGE_LABELS[deal.stage] ?? deal.stage}</dd>
+                    <dt className="text-sm text-zinc-500">Estimated Value</dt>
+                    <dd className="text-sm font-medium text-zinc-900">{deal.value ? `$${deal.value.toLocaleString()}` : "Not set"}</dd>
+                    <dt className="text-sm text-zinc-500">Created</dt>
+                    <dd className="text-sm text-zinc-700">{fmtDate(deal.createdAt)}</dd>
+                    <dt className="text-sm text-zinc-500">Updated</dt>
+                    <dd className="text-sm text-zinc-700">{fmtDate(deal.updatedAt)}</dd>
+                    {deal.wonAt && (
+                      <>
+                        <dt className="text-sm text-zinc-500">Won At</dt>
+                        <dd className="text-sm text-zinc-700">{fmtDate(deal.wonAt)}</dd>
+                      </>
+                    )}
+                    {deal.lostReason && (
+                      <>
+                        <dt className="text-sm text-zinc-500">Lost Reason</dt>
+                        <dd className="text-sm text-zinc-700">{deal.lostReason}</dd>
+                      </>
+                    )}
+                  </dl>
+                )}
               </section>
 
               <section className="rounded-lg border border-zinc-200 bg-white p-6">
@@ -395,37 +603,92 @@ export function DealDetailClient(props: {
               </section>
 
               <section className="rounded-lg border border-zinc-200 bg-white p-6">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-4">Contact</h2>
-                <dl className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-zinc-500">Name</dt>
-                    <dd className="text-zinc-900 font-medium">{deal.contact.name ?? "Unknown"}</dd>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Contact</h2>
+                  {editingContact ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingContact(false)} disabled={busy} className={SECONDARY_BUTTON_CLASS}>
+                        Cancel
+                      </button>
+                      <button onClick={saveContact} disabled={busy} className={PRIMARY_BUTTON_CLASS}>
+                        {busy ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setEditingContact(true)} disabled={busy} className={SECONDARY_BUTTON_CLASS}>
+                      Edit
+                    </button>
+                  )}
+                </div>
+
+                {editingContact ? (
+                  <div className="space-y-3 text-sm">
+                    <label className="block text-zinc-500">
+                      Name
+                      <input
+                        value={contactName}
+                        onChange={(e) => setContactName(e.target.value)}
+                        className={`mt-1 ${INPUT_CLASS}`}
+                        maxLength={200}
+                      />
+                    </label>
+                    <label className="block text-zinc-500">
+                      Company
+                      <input
+                        value={contactCompany}
+                        onChange={(e) => setContactCompany(e.target.value)}
+                        className={`mt-1 ${INPUT_CLASS}`}
+                        maxLength={200}
+                      />
+                    </label>
+                    <label className="block text-zinc-500">
+                      LinkedIn URL
+                      <input
+                        value={contactLinkedin}
+                        onChange={(e) => setContactLinkedin(e.target.value)}
+                        placeholder="https://www.linkedin.com/in/…"
+                        className={`mt-1 ${INPUT_CLASS}`}
+                      />
+                    </label>
+                    <p className="text-xs text-zinc-400">
+                      Filling these in makes AI briefs and proposals materially better — they are
+                      sent to the model as context.
+                    </p>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-zinc-500">Email</dt>
-                    <dd className="text-zinc-900 font-medium">{deal.contact.email}</dd>
-                  </div>
-                  {deal.contact.company && (
+                ) : (
+                  <dl className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Name</dt>
+                      <dd className="text-zinc-900 font-medium">{deal.contact.name ?? "Unknown"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Email</dt>
+                      <dd className="text-zinc-900 font-medium">{deal.contact.email}</dd>
+                    </div>
                     <div className="flex justify-between">
                       <dt className="text-zinc-500">Company</dt>
-                      <dd className="text-zinc-900 font-medium">{deal.contact.company}</dd>
+                      <dd className="text-zinc-900 font-medium">{deal.contact.company ?? "Not set"}</dd>
                     </div>
-                  )}
-                  {deal.contact.linkedinUrl && (
                     <div className="flex justify-between">
                       <dt className="text-zinc-500">LinkedIn</dt>
-                      <dd className="text-zinc-900 font-medium"><a href={deal.contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-700">View</a></dd>
+                      <dd className="text-zinc-900 font-medium">
+                        {deal.contact.linkedinUrl ? (
+                          <a href={deal.contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-700">View</a>
+                        ) : (
+                          "Not set"
+                        )}
+                      </dd>
                     </div>
-                  )}
-                  <div className="flex justify-between">
-                    <dt className="text-zinc-500">Source</dt>
-                    <dd className="text-zinc-900 font-medium capitalize">{deal.contact.source ?? "unknown"}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-zinc-500">Last Contact</dt>
-                    <dd className="text-zinc-900 font-medium">{fmtDateTime(deal.contact.lastContact)}</dd>
-                  </div>
-                </dl>
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Source</dt>
+                      <dd className="text-zinc-900 font-medium capitalize">{deal.contact.source ?? "unknown"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Last Contact</dt>
+                      <dd className="text-zinc-900 font-medium">{fmtDateTime(deal.contact.lastContact)}</dd>
+                    </div>
+                  </dl>
+                )}
               </section>
             </div>
           </div>
@@ -440,7 +703,7 @@ export function DealDetailClient(props: {
                 <article key={email.id} className="rounded-lg border border-zinc-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div>
-                      <span className={`inline-block rounded-full bg-${email.direction === "INBOUND" ? "sky" : "violet"}-50 text-${email.direction === "INBOUND" ? "sky" : "violet"}-700 px-2 py-0.5 text-[11px] font-medium`}>
+                      <span className={`inline-block rounded-full ${DIRECTION_COLORS[email.direction] ?? DIRECTION_COLOR_FALLBACK} px-2 py-0.5 text-[11px] font-medium`}>
                         {email.direction}
                       </span>
                       <span className="ml-2 text-xs text-zinc-400">{fmtDateTime(email.receivedAt)}</span>
@@ -461,6 +724,10 @@ export function DealDetailClient(props: {
 
         {activeTab === "facts" && (
           <div className="space-y-4">
+            <p className="text-xs text-zinc-500">
+              Every claim the importer extracted, with its source and strength. Untick anything
+              that should not count as applied — the ledger is a review surface, not a log.
+            </p>
             {deal.contact.facts.length === 0 ? (
               <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-zinc-500">No facts recorded yet.</div>
             ) : (
@@ -477,12 +744,19 @@ export function DealDetailClient(props: {
                         <span className="text-zinc-400">{fmtDateTime(fact.createdAt)}</span>
                       </div>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={fact.applied}
-                      disabled
-                      className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-600"
-                    />
+                    <label className="mt-1 flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-zinc-500">
+                      <input
+                        type="checkbox"
+                        checked={fact.applied}
+                        disabled={busy}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          void run(() => setFactAppliedAction(fact.id, next));
+                        }}
+                        className="h-4 w-4 rounded border-zinc-300 text-zinc-600"
+                      />
+                      applied
+                    </label>
                   </div>
                 </article>
               ))
@@ -492,6 +766,52 @@ export function DealDetailClient(props: {
 
         {activeTab === "tasks" && (
           <div className="space-y-4">
+            <section className="rounded-lg border border-zinc-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-900">Schedule a task</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="text-xs text-zinc-500">
+                  Type
+                  <select
+                    value={taskKind}
+                    onChange={(e) => setTaskKind(e.target.value as TaskKind)}
+                    className={`mt-1 ${INPUT_CLASS}`}
+                  >
+                    {TASK_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {k.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-zinc-500">
+                  Due
+                  <input
+                    type="date"
+                    value={taskDue}
+                    onChange={(e) => setTaskDue(e.target.value)}
+                    className={`mt-1 ${INPUT_CLASS}`}
+                  />
+                </label>
+                <label className="text-xs text-zinc-500 sm:col-span-3">
+                  Why — recorded on the task so future-you can judge if it still matters
+                  <input
+                    value={taskReason}
+                    onChange={(e) => setTaskReason(e.target.value)}
+                    placeholder="e.g. waiting on their budget confirmation"
+                    maxLength={500}
+                    className={`mt-1 ${INPUT_CLASS}`}
+                  />
+                </label>
+              </div>
+              <button
+                onClick={() => void addTask()}
+                disabled={busy || !taskReason.trim()}
+                className={`mt-3 ${PRIMARY_BUTTON_CLASS}`}
+              >
+                {busy ? "Scheduling…" : "Schedule task"}
+              </button>
+            </section>
+
             {deal.tasks.length === 0 ? (
               <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-zinc-500">No tasks scheduled.</div>
             ) : (
@@ -512,12 +832,26 @@ export function DealDetailClient(props: {
                       </div>
                       <p className="text-sm text-zinc-700">{task.reason}</p>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={task.done}
-                      disabled
-                      className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-600"
-                    />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        onClick={() =>
+                          void run(() =>
+                            task.done ? reopenTaskAction(task.id) : completeTaskAction(task.id),
+                          )
+                        }
+                        disabled={busy}
+                        className={SECONDARY_BUTTON_CLASS}
+                      >
+                        {task.done ? "Reopen" : "Mark done"}
+                      </button>
+                      <button
+                        onClick={() => void run(() => deleteTaskAction(task.id))}
+                        disabled={busy}
+                        className={SECONDARY_BUTTON_CLASS}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))

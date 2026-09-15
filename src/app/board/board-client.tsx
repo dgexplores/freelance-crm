@@ -17,7 +17,11 @@ import {
 } from "@dnd-kit/core";
 import type { CSSProperties, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
-import { moveDealAction, importGmailAction } from "@/app/board/actions";
+import {
+  moveDealAction,
+  importGmailAction,
+  scheduleStaleFollowUpsAction,
+} from "@/app/board/actions";
 
 type DealCard = {
   id: string;
@@ -297,9 +301,25 @@ export function BoardClient(props: {
   async function importMail() {
     setBusy(true);
     setError(null);
+    setStatus(null);
     const res = await importGmailAction();
     setBusy(false);
-    setStatus(res.message);
+    if (res.ok) setStatus(res.message);
+    else setError(res.message);
+  }
+
+  async function scheduleFollowUps() {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    const res = await scheduleStaleFollowUpsAction();
+    setBusy(false);
+    if (res.ok) {
+      setStatus(res.message);
+      router.refresh();
+    } else {
+      setError(res.message);
+    }
   }
 
   async function signOut() {
@@ -324,16 +344,21 @@ export function BoardClient(props: {
           </div>
           <div className="flex items-center gap-3">
             {props.staleCount > 0 && (
-              <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 text-xs font-medium">
-                {props.staleCount} deal{props.staleCount !== 1 ? "s" : ""} need follow-up
-              </span>
+              <button
+                onClick={scheduleFollowUps}
+                disabled={busy}
+                title="Create follow-up tasks for deals idle 5+ days"
+                className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 text-xs font-medium hover:bg-amber-100 disabled:opacity-40"
+              >
+                {props.staleCount} deal{props.staleCount !== 1 ? "s" : ""} need follow-up — schedule
+              </button>
             )}
             <button
               onClick={importMail}
               disabled={busy}
               className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
             >
-              {busy ? "Importing…" : "Import Gmail"}
+              {busy ? "Working…" : "Import Gmail"}
             </button>
             <button
               onClick={signOut}

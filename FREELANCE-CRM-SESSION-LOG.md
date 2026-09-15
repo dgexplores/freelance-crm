@@ -71,3 +71,59 @@ MVP skeleton (~3.4K LOC): Next.js 16 + React 19 + Prisma/Postgres + Better Auth 
 
 ---
 Update 2026-08-26: Vercel CI deploy pipeline armed (token + org/project secrets set). Frozen CLI deployments purged; production deploy now flows through GitHub Actions.
+
+---
+
+# Session Log — 2026-09-14/15 (second review + remediation)
+
+**Branch:** `fix/review-p0-hardening`
+**Scope:** Independent review of `main` @ `47bc617`, then fixes for everything it found.
+**Review document:** [CODE-REVIEW-2026-09.md](./CODE-REVIEW-2026-09.md) (549 lines, 29 findings).
+
+## What the review found
+
+The August audit's own claims were mostly accurate, but it missed five P0 defects. Two of
+them broke the product's core purpose:
+
+1. **HTML-only email bodies were discarded.** `extractBody` only decoded `text/plain` parts,
+   so a modern HTML email fell through to a 200-character snippet. Most inbound mail is
+   HTML-only, so most deals were built from a truncated preview.
+2. **One import run silently dropped everything past 250 messages.** `fetchNewMessages`
+   capped at `maxPages 10 × pageSize 25`, but the forward boundary advanced to
+   `newestFetched` regardless — so the backlog past the cap became permanently invisible.
+3. **Boundary advanced on failed/empty runs**, skipping mail after a transient Gmail error.
+4. **The SSE reader dropped its final buffered chunk**, truncating AI output.
+5. **`npm run predeploy` could never pass** — `prisma migrate status` exits non-zero when
+   `prisma/migrations/` does not exist, which is this project's normal state.
+
+Plus: the backup/restore pair could not round-trip (`.sql.gz` vs `.dump.gz`, and `pg_dump`
+URL-parsing broke on Supabase pooler URLs), ~180 lines of exported server actions had zero
+callers (Tasks, fact review, deal/contact editing were unreachable), a dynamic Tailwind class
+(`bg-${color}-50`) was never generated, errors leaked to clients from server actions, and the
+Gmail import had no rate limit.
+
+## What was changed
+
+| Area | Change |
+|---|---|
+| `src/lib/gmail.ts` | Added `htmlToText()`; `extractBody` prefers `text/plain` but converts HTML; `collectBodies` skips attachments; `fetchNewMessages` returns `{ messages, truncated }` at `maxPages 25` / `pageSize 100` |
+| `src/lib/pipeline.ts` | Extracted pure `decideBoundaryAdvance()` — never advances on errors or empty fetches; on truncation advances to the *oldest* message and reports it |
+| `src/lib/errors.ts` | Added `safeActionMessage()` — only `AppError` messages reach clients; everything else is logged and replaced with a generic fallback |
+| `src/lib/ai/gemini.ts` | Extracted `emitLine()`; added `flush()` so the trailing SSE buffer is emitted |
+| `src/app/board/actions.ts` | Rate limit on `importGmailAction` (6/min); new `updateDealAction`, `updateContactAction`, `setFactAppliedAction`, `scheduleStaleFollowUpsAction`; all Prisma calls wrapped + sanitized |
+| `src/app/board/[dealId]/task-actions.ts` | Rewritten: validation, `reopenTaskAction`, sanitized errors |
+| `board-client.tsx`, `deal-detail-client.tsx` | Reconnected the dead UI: task CRUD, fact apply toggle, deal + contact editing; fixed the dynamic Tailwind class with a lookup map |
+| `scripts/*.sh` | Backup/restore round-trip fixed; pre-deploy reordered (adds `db:generate`, schema drift, RLS check; drops `migration status`); RLS re-applied after restore |
+| Deleted | `board/[dealId]/actions.ts`, `board/[dealId]/schedule-actions.ts`, `components/error-boundary.tsx` (all zero callers) |
+| Tests added | `gmail.test.ts`, `errors.test.ts`, `ai/gemini.test.ts`, plus a `decideBoundaryAdvance` suite |
+| Docs | `SETUP.md` rewritten (wrong var names, wrong DB provider); `README.md` corrected throughout; this log |
+
+## Verification
+
+`npm ci` is blocked in this sandbox, so the normal gates could not run. Instead the real
+modules were transpiled and executed against stubbed imports — **29/29 behavioural checks
+pass**, including the HTML conversion, the truncation/error boundary decisions, and the SSE
+flush. Every `.ts`/`.tsx` file parses clean; all three shell scripts pass `bash -n`.
+
+**Still unverified:** `typecheck`, `lint`, `test`, and `build` have not been run against
+installed dependencies. Run `npm run predeploy` before merging.

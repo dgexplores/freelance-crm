@@ -58,3 +58,21 @@ export class UpstreamError extends AppError {
     this.name = "UpstreamError";
   }
 }
+
+/**
+ * Server actions return a user-facing `message` string, so they must not hand
+ * back raw `err.message` — a Prisma failure would surface constraint names and
+ * column details in the UI. Known domain errors carry a message written for
+ * humans; everything else is logged in full server-side and replaced with a
+ * generic string. Route handlers use `aiErrorResponse` for the same job.
+ */
+export function safeActionMessage(
+  err: unknown,
+  fallback: string,
+  onUnexpected?: (detail: string) => void,
+): string {
+  if (err instanceof AppError) return err.message;
+  const detail = err instanceof Error ? err.stack ?? err.message : String(err);
+  onUnexpected?.(detail);
+  return fallback;
+}

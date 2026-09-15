@@ -14,8 +14,12 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
+    "db:drift": "prisma migrate diff --from-url \"$DATABASE_URL\" --to-schema-datamodel prisma/schema.prisma --script",
+    "db:rls": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f prisma/rls-lockdown.sql",
+    "db:baseline": "mkdir -p prisma/migrations/00000000000000_baseline && prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/00000000000000_baseline/migration.sql",
     "predeploy": "bash scripts/pre-deploy.sh",
-    "backup:db": "bash scripts/backup-db.sh"
+    "backup:db": "bash scripts/backup-db.sh",
+    "restore:db": "bash scripts/restore-db.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

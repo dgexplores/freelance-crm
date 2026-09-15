@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
+import { safeActionMessage } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 
 export type ActionResult = {
   ok: boolean;
@@ -34,7 +36,11 @@ export async function updateRateCardAction(rateCard: string): Promise<ActionResu
     revalidatePath("/board");
     return { ok: true, message: "Rate card saved." };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to save rate card.";
-    return { ok: false, message };
+    return {
+      ok: false,
+      message: safeActionMessage(err, "Failed to save rate card.", (detail) =>
+        logger.error("Rate card save failed", { userId: user.id, error: detail }),
+      ),
+    };
   }
 }

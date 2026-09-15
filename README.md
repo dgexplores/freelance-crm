@@ -15,12 +15,13 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 **🟢 Deployed to production:** https://freelance-crm-xi.vercel.app
 
 ### Done
-- **Security hardening** — IDOR closed (session + owner scoping on every AI route, locked by a regression test), rate limiting on AI endpoints, typed error hierarchy, sanitized errors, Gemini key moved to headers
-- **Reliability** — retry with backoff on Gmail/Gemini failures, atomic per-message DB staging, forward-sync boundary race fixed, DB hot-path indexes, session-less cron scheduler that actually works
-- **Product UX** — drag-and-drop kanban with optimistic moves, streaming AI output (shimmer → typewriter → result card), motion design with `prefers-reduced-motion` support
-- **Quality gates** — 24 unit tests + 10 Postgres integration tests run in CI on every push; lint + typecheck + production build all green
-- **Ops** — Dockerfile + prod compose stack, `vercel.json` cron, backup + restore scripts, privacy policy + terms pages
-- **Infrastructure** — Supabase Postgres provisioned and migrated; Vercel project deployed with auth/cron/DB secrets wired
+- **Security hardening** — IDOR closed (session + owner scoping on every AI route, locked by a regression test), rate limiting on AI endpoints *and* on the expensive Gmail import, typed error hierarchy, sanitized errors on every server action, Gemini key moved to headers
+- **Reliability** — retry with backoff on Gmail/Gemini failures, atomic per-message DB staging, forward-sync boundary that can never skip unfetched mail, DB hot-path indexes, session-less cron scheduler that actually works, SSE stream flush fixed
+- **Product UX** — drag-and-drop kanban with optimistic moves, streaming AI output (shimmer → typewriter → result card), motion design with `prefers-reduced-motion` support, working task CRUD, manual deal/contact editing, fact review
+- **Correctness** — HTML-only email bodies are converted to text instead of falling back to a 200-char snippet; `Deal.value` and contact company/LinkedIn are editable
+- **Quality gates** — unit tests + 10 Postgres integration tests in CI on every push, plus a backup/restore round-trip test; lint + typecheck + production build
+- **Ops** — Dockerfile + prod compose stack, `vercel.json` cron, a backup/restore pair that actually round-trips, a pre-deploy script that can pass, RLS verification, privacy policy + terms pages
+- **Infrastructure** — Supabase Postgres provisioned; Vercel project deployed with auth/cron/DB secrets wired
 
 ### Left
 | Item | Who |
@@ -28,9 +29,14 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 | Google OAuth keys (`GOOGLE_CLIENT_ID`/`SECRET`) → Vercel env | Owner |
 | Gemini key (`GEMINI_API_KEY`) → Vercel env | Owner |
 | Redeploy after keys → full end-to-end loop | Either |
-| Stripe billing + AI usage metering | Deferred by owner |
-| Persist AI outputs to DB · onboarding checklist · Redis-backed limits · Playwright E2E · HTML email extraction | Backlog |
+| Adopt Prisma migrations (`npm run db:baseline`, see SETUP.md §7) | Either |
+| Account deletion + data export (the privacy policy promises both) | Backlog |
+| Import sent mail so briefs see both sides of a thread | Backlog |
+| Onboarding checklist · Redis-backed limits · Playwright E2E · signature-block parsing | Backlog |
 | `gmail.readonly` restricted-scope strategy before public launch (CASA assessment vs waitlist-first) | Decision needed |
+| Stripe billing + AI usage metering | Deferred by owner |
+
+See [Known limitations](#known-limitations) for what this deliberately does not do.
 
 Full delivery record: [FREELANCE-CRM-SESSION-LOG.md](./FREELANCE-CRM-SESSION-LOG.md).
 
@@ -124,23 +130,55 @@ Powers **all AI features** — briefs reference your services, proposals pull fe
 
 ### 5. Evidence Ledger (Facts)
 Every claim extracted from emails:
-- **Claim** — Literal statement from email
-- **Source** — `email`, `signature-block`, `linkedin`, `web`
+- **Claim** — Literal statement from the email text
+- **Source** — `email`. Signature-block, LinkedIn, and web enrichment are **not** implemented.
 - **Strength** — `strong` (directly stated) or `suggestion` (keyword heuristic)
-- **Applied** — Whether written into contact/deal record
+- **Applied** — Toggle it in the Facts tab to mark whether the claim should count
 
 *No guessing. Confidently wrong facts are worse than blank fields.*
 
-### 6. Gmail Sync
-- **Read-only** (`gmail.readonly` scope) — never sends, moves, archives, deletes
-- **Forward-only** — First import reads ≤24h back, then records boundary; older mail never imported
-- **Per-user boundary** — Stored on `User.gmailSyncStartedAt`, only advances on successful import
-- **Deduplication** — One contact per (user, email); one deal per contact
+### 6. Manual correction
+The importer only ever *infers*. Everything it infers can be corrected by hand, because a
+record you cannot fix is not a record you can trust:
+- **Deal** — title, estimated value, lost reason (Edit on the Overview tab)
+- **Contact** — name, company, LinkedIn URL (Edit on the contact card)
+- **Facts** — apply / unapply
+- **Tasks** — create, complete, reopen, delete
 
-### 7. Task Scheduling + Cron
-- **Manual:** Create follow-up/brief/proposal tasks from deal detail
+`Deal.value` is never guessed by the importer, so fill it in if you want value-aware
+briefs and proposals — otherwise the AI is told the value is unknown.
+
+### 7. Gmail Sync
+- **Read-only** (`gmail.readonly` scope) — never sends, moves, archives, deletes
+- **Forward-only** — first import reads ≤24h back, then records a boundary; older mail is never imported
+- **Per-user boundary** — stored on `User.gmailSyncStartedAt`, only advances after a successful run
+- **Never advances past unfetched mail** — a truncated fetch advances to the *oldest* message seen and says so
+- **Deduplication** — one contact per (user, email); one deal per contact
+
+### 8. Task Scheduling + Cron
+- **Manual:** create follow-up / brief / proposal tasks from the deal's Tasks tab
+- **On demand:** the amber "N deals need follow-up" chip on the board schedules them now
 - **Automatic:** `GET /api/cron/stale-followups` (daily cron) schedules follow-ups for deals idle ≥5 days
-- **Each task carries a reason** — You decide if it still matters
+- **Each task carries a reason** — you decide if it still matters
+
+---
+
+## Known limitations
+
+Things this does not do, stated plainly so nobody is surprised by them.
+
+| Limitation | Detail |
+|---|---|
+| **Backlog ceiling** | One import run fetches at most 2,500 messages. Beyond that the boundary advances only to the oldest message fetched, and the import reports that older mail in the window was skipped. Only reachable if you don't run the app for a long time. |
+| **Outbound mail is not imported** | The Gmail query is `in:inbox`, so only inbound messages exist. Briefs describe what *they* said, never what you replied. |
+| **One deal per contact, forever** | A returning client does not get a new deal; the existing one is reused. Deliberate for now, but it means repeat business is not modelled. |
+| **Deal titles freeze** | A deal keeps the subject line of the email that created it. |
+| **Company / LinkedIn are manual** | Nothing parses signature blocks. These fields only populate if you type them in. |
+| **Emails show the newest 20** | Per deal, with no "load more". |
+| **No account deletion or export** | The privacy policy says you can request both; neither is implemented yet. |
+| **Rate limits are per-instance** | The limiter is in-memory, so on serverless the effective limit is per running instance. Swap in Redis before this is multi-tenant. |
+| **`gmail.readonly` is a restricted scope** | Google requires a CASA Tier 2 assessment before public launch. A waitlist-first launch avoids it. |
+| **Stale follow-ups fire at 09:00 UTC** | Not the user's local 09:00; there is no per-user timezone. |
 
 ---
 
@@ -195,18 +233,26 @@ See [SETUP.md](./SETUP.md) for Google OAuth setup details.
 
 ## Production Deployment
 
-### Vercel + Neon (Recommended)
-1. Create Neon project, copy connection string
-2. `DATABASE_URL="<neon>" npm run db:push`
-3. Import repo to Vercel
-4. Add **all** environment variables (see below)
-5. Add production redirect URI to Google OAuth: `https://your-domain.com/api/auth/callback/google`
-6. Deploy
+### Vercel + Supabase (Recommended)
+1. Create a Supabase project (region: Singapore is closest to the current deployment)
+2. Copy the **pooled** connection string (port `6543`, `?pgbouncer=true`) into `DATABASE_URL`
+3. `DATABASE_URL="<supabase>" npm run db:push`
+4. `DATABASE_URL="<supabase>" npm run db:rls` — re-apply `prisma/rls-lockdown.sql`
+5. Import repo to Vercel
+6. Add **all** environment variables (see below)
+7. Add production redirect URI to Google OAuth: `https://your-domain.com/api/auth/callback/google`
+8. Deploy
+
+> **Why step 4 matters:** Supabase exposes `public` over its PostgREST API. Prisma
+> creates tables with RLS *disabled*, so a `db push` can silently make the
+> `User`/`Deal`/`Email` tables world-readable to anyone holding the anon key.
+> `rls-lockdown.sql` turns RLS on for every table; `npm run predeploy` fails the
+> build if any table is left exposed.
 
 ### Required Production Environment Variables
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string (Neon, Supabase, etc.) |
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Supabase pooled URL) |
 | `BETTER_AUTH_SECRET` | Yes | `openssl rand -base64 32` |
 | `BETTER_AUTH_URL` | Yes | Production URL (e.g., `https://your-domain.com`) |
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID |
@@ -217,24 +263,50 @@ See [SETUP.md](./SETUP.md) for Google OAuth setup details.
 | Variable | Purpose |
 |----------|---------|
 | `GEMINI_API_KEY` | AI features (briefs, proposals, nudges) |
-| `STRIPE_SECRET_KEY` | Billing (when implemented) |
 | `SENTRY_DSN` | Error monitoring |
 | `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Sentry source map upload |
 | `SENTRY_ENVIRONMENT` | `production` (auto-set on Vercel) |
 
 ### Database Backups
-Automated daily backups via cron:
+`backup-db.sh` writes a `pg_restore` custom-format archive to
+`$BACKUP_DIR/freelance-crm_<timestamp>.dump.gz` and verifies it is readable
+before reporting success. `restore-db.sh` consumes exactly that filename
+pattern and re-applies the RLS lockdown afterwards.
+
 ```bash
-# Add to crontab (runs daily at 2 AM)
-0 2 * * * /path/to/scripts/backup-db.sh
+# Daily at 2 AM (cron has no useful cwd — use absolute paths)
+0 2 * * * BACKUP_DIR=/var/backups/freelance-crm /path/to/scripts/backup-db.sh
 ```
-Required: `BACKUP_DIR`, `RETENTION_DAYS`, `DATABASE_URL`
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `DATABASE_URL` | — | Required. Passed straight to `pg_dump`; Supabase pooler URLs work as-is. |
+| `BACKUP_DIR` | `./backups` | Must match the value used by `restore-db.sh`. |
+| `RETENTION_DAYS` | `30` | Archives older than this are deleted after a successful run. |
+
+Requires `pg_dump` / `pg_restore` (PostgreSQL client tools) on the host.
+
+**Restore:**
+```bash
+DATABASE_URL="<target>" BACKUP_DIR=/var/backups/freelance-crm npm run restore:db
+```
+> Restoring drops and recreates the `public` schema. Point `DATABASE_URL` at the
+> target database deliberately — never at the one you are currently serving from.
 
 ### Pre-Deployment Checklist
 ```bash
 npm run predeploy
 ```
-Runs: typecheck → lint → tests → build → DB connectivity → migration status
+Runs, in order: required-env check → `db:generate` → typecheck → lint → tests →
+build → DB connectivity → schema drift (`prisma migrate diff --exit-code`) →
+RLS coverage. Set `SKIP_DB_CHECKS=1` to run only the local half.
+
+> `db:generate` is not optional: without a generated Prisma client, `typecheck`
+> resolves `@prisma/client` to its empty stub and passes vacuously.
+>
+> The drift step replaces `prisma migrate status`, which cannot work here — this
+> project has no `prisma/migrations` directory, so that command always exited
+> non-zero and made the script impossible to pass.
 
 ### Health Checks
 - `GET /api/health` → `{ database: true, timestamp, version }` (200/503)
@@ -297,13 +369,20 @@ npm run build        # Production build
 npm run start        # Production server
 npm run lint         # ESLint
 npm run typecheck    # TypeScript strict check
-npm run test         # Unit tests (24 tests)
+npm run test         # Unit tests
 npm run test:watch   # Watch mode
-npm run db:push      # Push schema to DB
+npm run test:int     # Integration tests (needs a real Postgres; skips if unreachable)
+
+npm run db:push      # Push schema to DB (this project's normal path)
 npm run db:generate  # Generate Prisma client
 npm run db:studio    # Prisma Studio
+npm run db:drift     # Show what differs between the live DB and schema.prisma
+npm run db:rls       # Re-apply row-level security (prisma/rls-lockdown.sql)
+npm run db:baseline  # Generate a baseline migration (one-off; see SETUP.md §7)
+
 npm run predeploy    # Full pre-deployment validation
-npm run backup:db    # Database backup (production)
+npm run backup:db    # Database backup  -> $BACKUP_DIR/freelance-crm_<ts>.dump.gz
+npm run restore:db   # Restore the newest backup (prompts before dropping schema)
 ```
 
 ---
@@ -330,23 +409,29 @@ npm run backup:db    # Database backup (production)
 ```
 src/
 ├── app/
+│   ├── (legal)/          # Privacy + Terms pages
 │   ├── api/
-│   │   ├── ai/           # AI endpoints (brief, proposal, nudge, stale)
-│   │   ├── auth/         # Better Auth endpoints
+│   │   ├── ai/           # AI endpoints (brief, proposal, nudge, nudge/stale)
+│   │   ├── auth/         # Better Auth catch-all
 │   │   ├── cron/         # Scheduled jobs (stale follow-ups)
 │   │   └── health/       # Health check endpoint
-│   ├── board/            # Pipeline board + deal detail
+│   ├── board/            # Pipeline board + deal detail (+ server actions)
 │   ├── settings/         # Rate card & account settings
 │   └── sign-in/          # Auth page
-├── components/           # Nav, skeletons, error boundaries
+├── components/           # Nav, skeletons
 ├── lib/
-│   ├── ai/               # AI prompts & generation (brief, proposal, nudge, context)
+│   ├── ai/               # Prompts, context loader, Gemini client, HTTP error mapping
 │   ├── auth.ts           # Better Auth config
+│   ├── errors.ts         # Typed AppError hierarchy + safeActionMessage()
 │   ├── gmail.ts          # Gmail API client (read-only, forward-only)
-│   ├── pipeline.ts       # Import & staging logic (dedupe, evidence, facts)
+│   ├── pipeline.ts       # Import & staging logic (dedupe, evidence, boundary)
+│   ├── rate-limit.ts     # Fixed-window limiter (in-memory; swap for Redis)
+│   ├── retry.ts          # Backoff + jitter, opt-in retry predicate
+│   ├── scheduler.ts      # Session-less stale-follow-up scheduling
 │   ├── logger.ts         # Structured JSON logging
 │   ├── prisma.ts         # Prisma client singleton
 │   └── session.ts        # Server session helpers
+├── instrumentation.ts    # Sentry server init
 └── middleware.ts         # Auth protection for /board, /settings
 ```
 
@@ -406,6 +491,26 @@ INBOX → QUALIFIED → PROPOSAL → WON / LOST
 ## Production Readiness Audit — 2026-08
 
 Independent senior-dev audit of the full codebase. Verdict at audit time: **solid MVP skeleton, not production-ready**. Three things broken on `main`, one critical security hole, and one non-code launch blocker.
+
+> **Superseded (2026-09).** This section is a historical record of the August audit
+> and is kept for context. A second review found five further P0 defects the first
+> audit missed — HTML-only email bodies were discarded, one import run silently
+> dropped everything past 250 messages, the forward boundary could advance past
+> unfetched mail, the SSE stream dropped its final chunk, and `predeploy` could
+> never pass. Those are fixed. Read this section as *how the code got here*, not
+> as a description of the current tree.
+
+### Corrected since this audit was written
+
+These bullets stated problems that no longer exist; leaving them uncorrected would
+misdescribe the code:
+
+| Audit claim | Current reality |
+|---|---|
+| "no restore script and no tested DR drill" | `scripts/restore-db.sh` exists, re-applies RLS after the schema drop, and CI runs a backup→restore round-trip on every push. |
+| "Error mapping in `src/lib/ai/http.ts` matches error message strings" | `aiErrorResponse` is `instanceof`-based over a typed `AppError` hierarchy; no message parsing anywhere. |
+| "Streaming AI output — Vercel AI SDK `streamText`" | Streaming is a hand-rolled SSE reader over `streamGenerateContent?alt=sse` in `src/lib/ai/gemini.ts`. The Vercel AI SDK is not a dependency. |
+| "Tests cover pure functions only (24)" | 55 unit tests across 6 files now, and `decideBoundaryAdvance` / `htmlToText` / the SSE parser all have regression tests. The 10 Postgres integration tests are unchanged. Still no E2E layer. |
 
 ### 🔴 Critical findings (P0 — fixed in this repo)
 
@@ -477,6 +582,7 @@ Backlog:          Stripe · persist AI outputs · onboarding · Redis limits · 
 ```
 
 Full delivery record: see [FREELANCE-CRM-SESSION-LOG.md](./FREELANCE-CRM-SESSION-LOG.md).
+The 2026-09 review that superseded this section: [CODE-REVIEW-2026-09.md](./CODE-REVIEW-2026-09.md).
 
 ---
 

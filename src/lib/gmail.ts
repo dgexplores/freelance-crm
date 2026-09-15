@@ -109,20 +109,78 @@ function decodeBase64Url(value: string): string {
 
 type GmailPart = {
   mimeType?: string;
+  filename?: string;
   body?: { data?: string };
   parts?: GmailPart[];
 };
 
-function extractBody(payload: GmailPart | undefined): string {
-  if (!payload) return "";
-  if (payload.mimeType === "text/plain" && payload.body?.data) {
-    return decodeBase64Url(payload.body.data);
+/**
+ * Strip an HTML email body down to readable text.
+ *
+ * Needed because a large share of real mail has no `text/plain` part at all
+ * (marketing systems, most mobile clients, anything composed as rich text).
+ * Without this, those messages fell back to Gmail's ~200-character snippet —
+ * which degraded the email view *and* every AI prompt, since prompts and
+ * keyword fact-extraction both read the stored body.
+ */
+export function htmlToText(html: string): string {
+  return (
+    html
+      // Drop non-content elements wholesale, including their inner text.
+      .replace(/<(script|style|head|title)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+      // Preserve block structure as line breaks before tags are removed.
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|tr|li|h[1-6]|blockquote|pre)>/gi, "\n")
+      .replace(/<li\b[^>]*>/gi, "- ")
+      .replace(/<[^>]+>/g, "")
+      // Decode the entities that actually appear in email bodies.
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&(?:mdash|ndash);/gi, "-")
+      .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+      // Collapse the whitespace soup that tag-stripping leaves behind. The
+      // block tags above already inserted the line breaks, so runs of blank
+      // lines collapse to one — keeps the text compact for prompt tokens.
+      .replace(/[ \t]+/g, " ")
+      .replace(/[ \t]*\n[ \t]*/g, "\n")
+      .replace(/\n{2,}/g, "\n")
+      .trim()
+  );
+}
+
+/** Depth-first walk collecting text parts, skipping attachments. */
+function collectBodies(
+  part: GmailPart | undefined,
+  out: { plain: string[]; html: string[] },
+): void {
+  if (!part) return;
+  // A filename means an attachment — its body is not message content.
+  if (!part.filename) {
+    const data = part.body?.data;
+    if (data) {
+      if (part.mimeType === "text/plain") out.plain.push(decodeBase64Url(data));
+      else if (part.mimeType === "text/html") out.html.push(decodeBase64Url(data));
+    }
   }
-  for (const part of payload.parts ?? []) {
-    const body = extractBody(part);
-    if (body) return body;
-  }
-  return "";
+  for (const child of part.parts ?? []) collectBodies(child, out);
+}
+
+/**
+ * Prefer the plain-text part; fall back to converting the HTML part.
+ * Returns "" only when the message genuinely carries no text.
+ */
+export function extractBody(payload: GmailPart | undefined): string {
+  const out = { plain: [] as string[], html: [] as string[] };
+  collectBodies(payload, out);
+
+  const plain = out.plain.join("\n").trim();
+  if (plain) return plain;
+
+  return htmlToText(out.html.join("\n"));
 }
 
 export type GmailListResponse = {
@@ -173,19 +231,34 @@ function isTransientGmailError(err: unknown): boolean {
   return false;
 }
 
+export type FetchResult = {
+  messages: ImportedMessage[];
+  /**
+   * True when the page budget ran out while Gmail still had more messages to
+   * offer. The caller MUST NOT advance the forward-only boundary to the newest
+   * fetched message in this case — messages older than the oldest one we saw
+   * were never fetched, and advancing past them would skip them forever.
+   */
+  truncated: boolean;
+};
+
 export async function fetchNewMessages(
   userId: string,
   sinceMs: number,
   opts: { maxPages?: number; pageSize?: number } = {},
-): Promise<ImportedMessage[]> {
-  const maxPages = opts.maxPages ?? 10;
-  const pageSize = opts.pageSize ?? 25;
+): Promise<FetchResult> {
+  // Gmail caps maxResults at 100 per page. The ceiling exists only so one
+  // runaway backfill cannot exhaust the function's time budget; correctness no
+  // longer depends on it, because truncation is now detected and reported.
+  const maxPages = opts.maxPages ?? 25;
+  const pageSize = opts.pageSize ?? 100;
 
   const token = await getGmailAccessToken(userId);
   const q = `in:inbox after:${Math.floor(sinceMs / 1000)}`;
 
   const imported: ImportedMessage[] = [];
   let nextPageToken: string | undefined;
+  let truncated = false;
   for (let page = 0; page < maxPages; page++) {
     const params = new URLSearchParams({
       q,
@@ -236,9 +309,11 @@ export async function fetchNewMessages(
 
     nextPageToken = list.nextPageToken;
     if (!nextPageToken) break;
+    // Exhausted the page budget with mail still available → truncated.
+    if (page === maxPages - 1) truncated = true;
   }
 
-  return imported;
+  return { messages: imported, truncated };
 }
 
 export type ImportContext = {
@@ -284,4 +359,10 @@ export type ImportResult = {
   deals: number;
   facts: number;
   errors: string[];
+  /**
+   * True when more mail existed than one run could fetch. The boundary then
+   * advances only to the oldest message actually fetched, and the UI warns
+   * that a window was skipped — never silently.
+   */
+  truncated: boolean;
 };

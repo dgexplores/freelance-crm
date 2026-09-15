@@ -27,6 +27,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Without this, @prisma/client resolves to its un-generated stub and
+      # typecheck passes vacuously — the exact Prisma type errors it exists to
+      # catch would slip through.
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Run lint
         run: npm run lint
 
@@ -73,6 +79,20 @@ jobs:
 
       - name: Run integration tests
         run: npm run test:int
+
+      # The backup/restore pair had drifted apart (different extension and
+      # different default directory), so restore could never find what backup
+      # wrote. This exercises the real round-trip against the service container
+      # so it cannot regress unnoticed again.
+      - name: Verify backup/restore round-trip
+        run: |
+          chmod +x scripts/*.sh
+          BACKUP_DIR=./backups ./scripts/backup-db.sh
+          test -n "$(ls -A ./backups)" || { echo "no backup produced"; exit 1; }
+          ./scripts/restore-db.sh ./backups/*.dump.gz <<< "y"
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          BACKUP_DIR: ./backups
 
   build:
     name: Build

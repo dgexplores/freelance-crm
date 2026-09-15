@@ -141,13 +141,55 @@ function buildFacts(
   return facts;
 }
 
+export type BoundaryDecision =
+  | { advance: false; reason: "errors" | "no-messages" }
+  | { advance: true; to: Date; reason: "complete" | "truncated" };
+
+/**
+ * Decide where the forward-only boundary may move after an import run.
+ *
+ * Extracted from `importGmail` so the rule is directly testable — this is the
+ * logic that used to skip mail silently, so it should not be buried inside an
+ * async function that needs a live Gmail account to exercise.
+ *
+ * Rules, in priority order:
+ *  - any per-message error  → do not advance, so the whole window is retried
+ *  - no messages fetched    → do not advance (never jump to `now`: mail that
+ *                             exists but was not returned, e.g. during Gmail
+ *                             indexing lag, would be skipped forever)
+ *  - truncated fetch        → advance only to the OLDEST message seen, because
+ *                             everything below it was never fetched
+ *  - otherwise              → advance to the NEWEST message seen, never `now`,
+ *                             so mail arriving mid-import is picked up next run
+ */
+export function decideBoundaryAdvance(
+  messages: ImportedMessage[],
+  truncated: boolean,
+  errorCount: number,
+): BoundaryDecision {
+  if (errorCount > 0) return { advance: false, reason: "errors" };
+
+  const first = messages[0];
+  if (!first) return { advance: false, reason: "no-messages" };
+
+  if (truncated) {
+    let oldest = first.receivedAt;
+    for (const m of messages) if (m.receivedAt < oldest) oldest = m.receivedAt;
+    return { advance: true, to: oldest, reason: "truncated" };
+  }
+
+  let newest = first.receivedAt;
+  for (const m of messages) if (m.receivedAt > newest) newest = m.receivedAt;
+  return { advance: true, to: newest, reason: "complete" };
+}
+
 /**
  * Orchestrate a forward-only import run:
  *  1. resolve the forward-only boundary (recorded on first successful run)
  *  2. fetch only messages newer than the boundary (gmail.readonly)
  *  3. stage them into contacts/deals/facts (each message atomically)
- *  4. persist the boundary at the newest fetched message timestamp only
- *     after a successful run (no lost mail; overlap is safe via dedupe)
+ *  4. persist the boundary only after a successful run, and never past a
+ *     message we did not fetch (no silent mail loss; overlap is safe via dedupe)
  */
 export async function importGmail(
   userId: string,
@@ -156,9 +198,13 @@ export async function importGmail(
 
   logger.info("Starting Gmail import", { userId, firstRun: ctx.firstRun, sinceMs: ctx.sinceMs });
 
-  const messages = await fetchNewMessages(userId, ctx.sinceMs);
+  const { messages, truncated } = await fetchNewMessages(userId, ctx.sinceMs);
 
-  logger.info("Fetched messages from Gmail", { userId, count: messages.length });
+  logger.info("Fetched messages from Gmail", {
+    userId,
+    count: messages.length,
+    truncated,
+  });
 
   const pipeline = await runPipeline(userId, messages);
 
@@ -167,23 +213,40 @@ export async function importGmail(
     select: { gmailSyncStartedAt: true },
   });
 
-  if (pipeline.errors.length === 0) {
-    // Advance to the newest message we actually saw — never "now" — so mail
-    // arriving mid-import is picked up next run instead of being skipped.
-    const newestFetched = messages.reduce<Date | null>(
-      (max, m) => (!max || m.receivedAt > max ? m.receivedAt : max),
-      null,
-    );
-    await recordForwardOnlyBoundary(userId, newestFetched ?? new Date());
-    logger.info("Gmail import completed successfully", { userId, ...pipeline });
+  const decision = decideBoundaryAdvance(messages, truncated, pipeline.errors.length);
+
+  if (decision.advance) {
+    await recordForwardOnlyBoundary(userId, decision.to);
+  }
+
+  if (decision.reason === "errors") {
+    // Partial failure: the boundary stays put so the window is retried.
+    logger.warn("Gmail import completed with errors — boundary not advanced", {
+      userId,
+      ...pipeline,
+    });
+  } else if (decision.reason === "no-messages") {
+    logger.info("Gmail import found no new messages", { userId });
+  } else if (decision.reason === "truncated") {
+    // More mail existed than one run could fetch. The boundary moved only to the
+    // oldest message seen, so it never passed an unfetched message; the next run
+    // re-fetches (and dedupes) the overlap. Mail below this window is skipped by
+    // design — forward-only — and the caller tells the user instead of hiding it.
+    logger.warn("Gmail import was truncated by the fetch limit", {
+      userId,
+      fetched: messages.length,
+      advancedTo: decision.to.toISOString(),
+      ...pipeline,
+    });
   } else {
-    logger.warn("Gmail import completed with errors", { userId, ...pipeline });
+    logger.info("Gmail import completed successfully", { userId, ...pipeline });
   }
 
   return {
     boundary: boundary?.gmailSyncStartedAt ?? null,
     firstRun: ctx.firstRun,
     fetched: messages.length,
+    truncated,
     ...pipeline,
   };
 }
