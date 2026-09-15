@@ -13,9 +13,9 @@ import {
   completeTaskAction,
   reopenTaskAction,
   deleteTaskAction,
-  TASK_KINDS,
-  type TaskKind,
 } from "./task-actions";
+import { TASK_KINDS, TASK_KIND_LABELS, type TaskKind } from "@/lib/tasks";
+import { loadMoreEmailsAction, type LoadedEmail } from "./email-actions";
 
 type Deal = {
   id: string;
@@ -160,6 +160,8 @@ export function DealDetailClient(props: {
   userName: string;
   userEmail: string;
   hasRateCard: boolean;
+  /** True when the contact has more mail than the initial page shipped. */
+  hasMoreEmails: boolean;
 }) {
   const { deal } = props;
 
@@ -193,6 +195,29 @@ export function DealDetailClient(props: {
   const [taskKind, setTaskKind] = useState<TaskKind>("follow_up");
   const [taskDue, setTaskDue] = useState(tomorrowAsInputValue);
   const [taskReason, setTaskReason] = useState("");
+
+  // Email history paging. The server ships only the newest page, so a long
+  // thread is reachable on demand rather than silently cut off.
+  const [olderEmails, setOlderEmails] = useState<LoadedEmail[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreAvailable, setMoreAvailable] = useState(props.hasMoreEmails);
+
+  const allEmails = [...deal.contact.emails, ...olderEmails];
+
+  async function loadOlderEmails() {
+    const oldest = allEmails[allEmails.length - 1];
+    if (!oldest) return;
+    setLoadingMore(true);
+    setError(null);
+    const res = await loadMoreEmailsAction(deal.id, oldest.receivedAt);
+    setLoadingMore(false);
+    if (!res.ok) {
+      setError(res.message);
+      return;
+    }
+    setOlderEmails((prev) => [...prev, ...res.emails]);
+    setMoreAvailable(res.hasMore);
+  }
 
   /**
    * Run a server action, surface its message, and refresh the server data so
@@ -370,7 +395,7 @@ export function DealDetailClient(props: {
           <nav className="flex gap-1 overflow-x-auto">
             {[
               { id: "overview", label: "Overview" },
-              { id: "emails", label: "Emails", count: deal.contact.emails.length },
+              { id: "emails", label: "Emails", count: allEmails.length },
               { id: "facts", label: "Facts", count: deal.contact.facts.length },
               { id: "tasks", label: "Tasks", count: deal.tasks.length },
             ].map((tab) => (
@@ -696,10 +721,10 @@ export function DealDetailClient(props: {
 
         {activeTab === "emails" && (
           <div className="space-y-4">
-            {deal.contact.emails.length === 0 ? (
+            {allEmails.length === 0 ? (
               <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-zinc-500">No emails imported yet.</div>
             ) : (
-              deal.contact.emails.map((email) => (
+              allEmails.map((email) => (
                 <article key={email.id} className="rounded-lg border border-zinc-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div>
@@ -718,6 +743,25 @@ export function DealDetailClient(props: {
                   <p className="text-sm text-zinc-700 whitespace-pre-wrap max-h-40 overflow-auto font-mono text-[13px]">{email.body || "(no body)"}</p>
                 </article>
               ))
+            )}
+
+            {moreAvailable ? (
+              <div className="text-center">
+                <button
+                  onClick={() => void loadOlderEmails()}
+                  disabled={loadingMore}
+                  className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 disabled:opacity-40"
+                >
+                  {loadingMore ? "Loading…" : "Load older emails"}
+                </button>
+              </div>
+            ) : (
+              allEmails.length > 0 && (
+                <p className="text-center text-[11px] text-zinc-400">
+                  That is the whole thread — {allEmails.length} message
+                  {allEmails.length !== 1 ? "s" : ""}.
+                </p>
+              )
             )}
           </div>
         )}
@@ -778,7 +822,7 @@ export function DealDetailClient(props: {
                   >
                     {TASK_KINDS.map((k) => (
                       <option key={k} value={k}>
-                        {k.replace("_", " ")}
+                        {TASK_KIND_LABELS[k]}
                       </option>
                     ))}
                   </select>

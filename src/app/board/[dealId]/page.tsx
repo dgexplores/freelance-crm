@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
 import { notFound } from "next/navigation";
+import { EMAIL_PAGE_SIZE } from "@/lib/pagination";
 import { DealDetailClient } from "./deal-detail-client";
 
 export const metadata = { title: "Deal | Inbox CRM" };
@@ -17,7 +18,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ dea
         include: {
           emails: {
             orderBy: { receivedAt: "desc" },
-            take: 20,
+            take: EMAIL_PAGE_SIZE,
             select: {
               id: true,
               subject: true,
@@ -57,6 +58,12 @@ export default async function DealDetailPage({ params }: { params: Promise<{ dea
   });
 
   if (!deal) notFound();
+
+  // Only the newest EMAIL_PAGE_SIZE messages are shipped; the client needs to
+  // know whether paging further back is worth offering.
+  const emailTotal = await prisma.email.count({
+    where: { userId: user.id, contactId: deal.contactId },
+  });
 
   const userData = await prisma.user.findUnique({
     where: { id: user.id },
@@ -116,6 +123,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ dea
       userName={userData?.name ?? ""}
       userEmail={userData?.email ?? ""}
       hasRateCard={!!userData?.rateCard}
+      hasMoreEmails={emailTotal > EMAIL_PAGE_SIZE}
     />
   );
 }

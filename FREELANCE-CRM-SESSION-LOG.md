@@ -127,3 +127,77 @@ flush. Every `.ts`/`.tsx` file parses clean; all three shell scripts pass `bash 
 
 **Still unverified:** `typecheck`, `lint`, `test`, and `build` have not been run against
 installed dependencies. Run `npm run predeploy` before merging.
+
+---
+
+# Session Log — 2026-09-15 (capability pass)
+
+**Branch:** `fix/review-p0-hardening` (continued)
+**Scope:** Beyond the bug fixes — make the system more capable for the person actually using it.
+
+## Why these four
+
+The review found the app was correct but shallow in four places that matter daily:
+
+1. **You could not find a deal.** Five columns of cards, no search, no filter, no sort. Fine at
+   ten deals, useless at fifty.
+2. **You could not see the whole conversation.** The Emails tab stopped at the newest 20 with no
+   "load more", so older context — often where the actual scope or budget was agreed — was
+   unreachable from inside the app.
+3. **You could not take your data out.** The privacy policy promised export and deletion, but
+   only "by contacting us". A promise you cannot keep yourself is not a feature.
+4. **The board showed no numbers.** No pipeline value, no won total. For a freelancer that is
+   the first question.
+
+## What was built
+
+| Area | Change |
+|---|---|
+| `src/lib/staleness.ts` (new) | The "is this deal going quiet?" rule, extracted from `ai/context.ts` which imports Prisma and therefore could not be used by a client component. Prisma-free, takes plain dates. `context.ts` now delegates to it, so the server's `staleCount` badge and the board's "needs follow-up" filter cannot drift apart. Dropped the unused `PROPOSAL_STAGES`. |
+| `src/lib/board-filter.ts` (new) | `matchesQuery` (all whitespace-separated tokens must match, across title / contact / email / evidence / subject / sender / stage), `filterDeals`, `sortDeals`, `dealIsStale`, `dealIdleDays`. Pure, so testable without rendering React. |
+| `board-client.tsx` | Search box, stage chips with `shown/total` counts, "needs follow-up" toggle, sort selector, clear-filters, an empty state that explains itself, and a totals strip (open value, won value, lost, unpriced-open count). `nowMs` comes from the server so SSR and hydration agree on staleness. |
+| `email-actions.ts` (new) + deal page | `loadMoreEmailsAction(dealId, beforeIso)` pages backwards 20 at a time, fetching one extra row to detect whether another page exists. Scoped by `userId` **and** the deal's contact. |
+| `src/lib/account.ts` (new) | `collectUserData` (export payload) and `deleteUserData` (erasure). |
+| `src/app/api/account/export/route.ts` (new) | `GET` → JSON download, `Content-Disposition: attachment`, `Cache-Control: no-store`. Not covered by the middleware matcher, so the session check inside is the access control. |
+| `settings/actions.ts` + `settings-client.tsx` | `deleteAccountAction` (requires typing `DELETE`) and a "Your data" section with the export link and the delete flow. |
+| Privacy policy | Rewritten from "contact us" to point at the self-serve controls, plus a link to revoke Google access. |
+
+## Two decisions worth recording
+
+**OAuth tokens are excluded from the export.** `Account` holds live `accessToken` / `refreshToken`
+values. Including them would turn a data-portability feature into a credential-leak feature, so
+they are left out and the omission is stated in the payload itself.
+
+**Deletion is ordered, not cascaded.** `Contact`, `Deal`, `Email` and `Fact` all hold a required
+`user` relation with no `onDelete: Cascade`, so deleting the `User` first fails on a foreign key.
+The erasure goes deepest-first inside one transaction — Task → Fact/Email/Deal → Contact →
+Session/Account → User — so a mid-way failure rolls back instead of leaving a half-deleted account.
+
+## Bugs found while doing this
+
+- **`"use server"` modules exporting values.** `actions.ts` exported `DEAL_STAGES` and
+  `task-actions.ts` exported `TASK_KINDS`. Next.js only permits async-function exports from a
+  `"use server"` file, so both would have failed `next build`. `DEAL_STAGES` was only used inside
+  its own module (un-exported); `TASK_KINDS` moved to `src/lib/tasks.ts` because the deal page is
+  a client component and needs it as a runtime value.
+- **A near-miss Prisma-in-the-browser import.** The settings client briefly imported
+  `DELETE_CONFIRMATION_WORD` from `@/lib/account`, which imports Prisma — and `@/lib/prisma` has
+  no `server-only` guard, so it would have silently bundled the Prisma client into the browser.
+  Moved to `src/lib/account-constants.ts`.
+- **Hydration hazard avoided.** Staleness depends on the current time. Computing `Date.now()` on
+  the server *and* in the browser would let a deal cross the 5-day line between the two renders,
+  producing a hydration mismatch, so the server passes `nowMs` down.
+
+## Verification
+
+Harness extended from 29 to **80 behavioural checks, all passing** — the shared staleness rule
+(including that exactly 5 idle days is *not* stale, matching the original exclusive cutoff), the
+search/filter/sort semantics, the export payload shape and token exclusion, and the deletion
+ordering (asserted by recording call order inside a stubbed transaction).
+
+Unit tests added: `staleness.test.ts`, `board-filter.test.ts`, `account.test.ts`.
+
+**Still unverified:** `typecheck`, `lint`, `test`, `build`. `npm ci` remains blocked in this
+sandbox. The new vitest files are written but have never been executed — the behaviour they
+assert *is* verified, but through the harness rather than through vitest. Run
+`npm run predeploy` before merging.

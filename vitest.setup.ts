@@ -23,36 +23,41 @@ vi.mock("@/lib/auth-client", () => ({
   },
 }));
 
-// Mock Prisma
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    user: {
-      findUnique: vi.fn(),
-      update: vi.fn(),
-    },
+// Mock Prisma. `$transaction` runs its callback against the same model mocks,
+// so delete ordering can be asserted by inspecting call order.
+vi.mock("@/lib/prisma", () => {
+  const models = {
+    user: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
     deal: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      deleteMany: vi.fn(),
     },
     contact: {
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      deleteMany: vi.fn(),
     },
     email: {
       findUnique: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
+      deleteMany: vi.fn(),
     },
     fact: {
       createMany: vi.fn(),
       count: vi.fn(),
+      findMany: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      deleteMany: vi.fn(),
     },
     task: {
       findFirst: vi.fn(),
@@ -60,12 +65,20 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
-    account: {
-      findFirst: vi.fn(),
-      update: vi.fn(),
+    session: { deleteMany: vi.fn() },
+    account: { findFirst: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+  };
+
+  return {
+    prisma: {
+      ...models,
+      $transaction: vi.fn(async (fn: (tx: typeof models) => Promise<unknown>) =>
+        fn(models),
+      ),
     },
-  },
+  };
 }));
 
 // Mock server actions
@@ -76,11 +89,11 @@ vi.mock("@/app/board/actions", () => ({
   updateContactAction: vi.fn(),
   setFactAppliedAction: vi.fn(),
   scheduleStaleFollowUpsAction: vi.fn(),
-  DEAL_STAGES: ["INBOX", "QUALIFIED", "PROPOSAL", "WON", "LOST"],
 }));
 
 vi.mock("@/app/settings/actions", () => ({
   updateRateCardAction: vi.fn(),
+  deleteAccountAction: vi.fn(),
 }));
 
 vi.mock("@/app/board/[dealId]/task-actions", () => ({
@@ -88,8 +101,15 @@ vi.mock("@/app/board/[dealId]/task-actions", () => ({
   completeTaskAction: vi.fn(),
   reopenTaskAction: vi.fn(),
   deleteTaskAction: vi.fn(),
-  TASK_KINDS: ["follow_up", "brief", "proposal"],
 }));
+
+vi.mock("@/app/board/[dealId]/email-actions", () => ({
+  loadMoreEmailsAction: vi.fn(),
+}));
+
+// NOTE: TASK_KINDS deliberately has no mock — it lives in the plain
+// `@/lib/tasks` module precisely so it is importable outside a "use server"
+// file, and mocking it here would hide a regression of that constraint.
 
 // Suppress console.error in tests unless explicitly testing errors
 const originalError = console.error;

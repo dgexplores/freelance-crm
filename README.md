@@ -19,6 +19,9 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 - **Reliability** — retry with backoff on Gmail/Gemini failures, atomic per-message DB staging, forward-sync boundary that can never skip unfetched mail, DB hot-path indexes, session-less cron scheduler that actually works, SSE stream flush fixed
 - **Product UX** — drag-and-drop kanban with optimistic moves, streaming AI output (shimmer → typewriter → result card), motion design with `prefers-reduced-motion` support, working task CRUD, manual deal/contact editing, fact review
 - **Correctness** — HTML-only email bodies are converted to text instead of falling back to a 200-char snippet; `Deal.value` and contact company/LinkedIn are editable
+- **Findability** — board search across deals, contacts, evidence and subject lines; stage filter; "needs follow-up" filter; sort by recency, value or idleness; open/won/lost totals
+- **Depth** — the full email thread is reachable via "load older emails" (the page used to stop at the newest 20 with no way back)
+- **Data ownership** — self-serve JSON export and account deletion, so the privacy policy's promise no longer depends on emailing support
 - **Quality gates** — unit tests + 10 Postgres integration tests in CI on every push, plus a backup/restore round-trip test; lint + typecheck + production build
 - **Ops** — Dockerfile + prod compose stack, `vercel.json` cron, a backup/restore pair that actually round-trips, a pre-deploy script that can pass, RLS verification, privacy policy + terms pages
 - **Infrastructure** — Supabase Postgres provisioned; Vercel project deployed with auth/cron/DB secrets wired
@@ -30,9 +33,9 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 | Gemini key (`GEMINI_API_KEY`) → Vercel env | Owner |
 | Redeploy after keys → full end-to-end loop | Either |
 | Adopt Prisma migrations (`npm run db:baseline`, see SETUP.md §7) | Either |
-| Account deletion + data export (the privacy policy promises both) | Backlog |
 | Import sent mail so briefs see both sides of a thread | Backlog |
 | Onboarding checklist · Redis-backed limits · Playwright E2E · signature-block parsing | Backlog |
+| Persist AI outputs (regenerating on every click costs tokens and loses history) | Backlog |
 | `gmail.readonly` restricted-scope strategy before public launch (CASA assessment vs waitlist-first) | Decision needed |
 | Stripe billing + AI usage metering | Deferred by owner |
 
@@ -161,6 +164,33 @@ briefs and proposals — otherwise the AI is told the value is unknown.
 - **Automatic:** `GET /api/cron/stale-followups` (daily cron) schedules follow-ups for deals idle ≥5 days
 - **Each task carries a reason** — you decide if it still matters
 
+### 9. Finding Things
+The board is searchable, because scrolling five columns is not a strategy:
+- **Search** — one box across deal title, contact name, contact email, the evidence line, the
+  latest subject line and the sender. Multiple words all have to match, so `acme retainer`
+  narrows instead of widening.
+- **Stage chips** — All / INBOX / QUALIFIED / PROPOSAL / WON / LOST. When a filter is active each
+  column shows `shown/total` rather than silently changing the meaning of its count.
+- **Needs follow-up** — shows only the deals the staleness rule flags, using the *same* rule as
+  the server's badge, so the number and the filter can never disagree.
+- **Sort** — recent activity, deal value (unpriced last), or most idle.
+- **Totals** — open pipeline value, won value, lost count, and how many open deals still have no
+  value set (the importer never guesses one).
+
+### 10. Full Thread History
+The Emails tab loads the newest 20 messages, then **Load older emails** pages further back —
+20 at a time, scoped to the deal's contact and to your account. A long thread is no longer
+truncated with no way to see the rest.
+
+### 11. Your Data
+- **Export** — `GET /api/account/export` downloads a JSON file with your profile, rate card,
+  contacts, deals, emails, facts and tasks. OAuth tokens are deliberately excluded: they are
+  credentials, not data, and writing live refresh tokens to a file on disk would turn data
+  portability into a leak.
+- **Delete** — settings → *Your data* → type `DELETE` to erase the account and everything in it.
+  Runs in a single transaction, children first, so a mid-way failure leaves the account intact
+  rather than half-deleted.
+
 ---
 
 ## Known limitations
@@ -174,8 +204,8 @@ Things this does not do, stated plainly so nobody is surprised by them.
 | **One deal per contact, forever** | A returning client does not get a new deal; the existing one is reused. Deliberate for now, but it means repeat business is not modelled. |
 | **Deal titles freeze** | A deal keeps the subject line of the email that created it. |
 | **Company / LinkedIn are manual** | Nothing parses signature blocks. These fields only populate if you type them in. |
-| **Emails show the newest 20** | Per deal, with no "load more". |
-| **No account deletion or export** | The privacy policy says you can request both; neither is implemented yet. |
+| **AI output is not persisted** | Briefs, proposals and nudges are regenerated on each click, so history is lost and every click costs tokens. |
+| **Search is client-side** | Filtering happens in the browser over the deals already loaded, so it stays instant but does not search mail bodies or reach past the loaded set. |
 | **Rate limits are per-instance** | The limiter is in-memory, so on serverless the effective limit is per running instance. Swap in Redis before this is multi-tenant. |
 | **`gmail.readonly` is a restricted scope** | Google requires a CASA Tier 2 assessment before public launch. A waitlist-first launch avoids it. |
 | **Stale follow-ups fire at 09:00 UTC** | Not the user's local 09:00; there is no per-user timezone. |
@@ -411,23 +441,30 @@ src/
 ├── app/
 │   ├── (legal)/          # Privacy + Terms pages
 │   ├── api/
+│   │   ├── account/      # Self-serve data export (JSON download)
 │   │   ├── ai/           # AI endpoints (brief, proposal, nudge, nudge/stale)
 │   │   ├── auth/         # Better Auth catch-all
 │   │   ├── cron/         # Scheduled jobs (stale follow-ups)
 │   │   └── health/       # Health check endpoint
 │   ├── board/            # Pipeline board + deal detail (+ server actions)
-│   ├── settings/         # Rate card & account settings
+│   ├── settings/         # Rate card, data export/delete, account settings
 │   └── sign-in/          # Auth page
 ├── components/           # Nav, skeletons
 ├── lib/
 │   ├── ai/               # Prompts, context loader, Gemini client, HTTP error mapping
+│   ├── account.ts        # Export payload + transactional account erasure
+│   ├── account-constants.ts # Client-safe account constants
 │   ├── auth.ts           # Better Auth config
+│   ├── board-filter.ts   # Board search / filter / sort (pure)
 │   ├── errors.ts         # Typed AppError hierarchy + safeActionMessage()
 │   ├── gmail.ts          # Gmail API client (read-only, forward-only)
+│   ├── pagination.ts     # Page sizes shared by pages and actions
 │   ├── pipeline.ts       # Import & staging logic (dedupe, evidence, boundary)
 │   ├── rate-limit.ts     # Fixed-window limiter (in-memory; swap for Redis)
 │   ├── retry.ts          # Backoff + jitter, opt-in retry predicate
 │   ├── scheduler.ts      # Session-less stale-follow-up scheduling
+│   ├── staleness.ts      # The one "is this deal going quiet?" rule
+│   ├── tasks.ts          # Task kinds (importable outside "use server")
 │   ├── logger.ts         # Structured JSON logging
 │   ├── prisma.ts         # Prisma client singleton
 │   └── session.ts        # Server session helpers

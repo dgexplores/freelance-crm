@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { updateRateCardAction } from "./actions";
+import { useRouter } from "next/navigation";
+import { DELETE_CONFIRMATION_WORD } from "@/lib/account-constants";
+import { deleteAccountAction, updateRateCardAction } from "./actions";
 
 const DEFAULT_RATE_CARD = `# Rate Card
 
@@ -39,6 +41,27 @@ export function SettingsClient(props: {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const router = useRouter();
+  const [confirmWord, setConfirmWord] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const canDelete = confirmWord === DELETE_CONFIRMATION_WORD && !deleting;
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    const res = await deleteAccountAction(confirmWord);
+    if (res.ok) {
+      // The session rows were deleted as part of the transaction, so the
+      // cookie in hand no longer resolves. Leave the protected area.
+      router.replace("/");
+      return;
+    }
+    setDeleting(false);
+    setDeleteError(res.message);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -133,7 +156,7 @@ export function SettingsClient(props: {
         </div>
       </section>
 
-      <section>
+      <section className="mb-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
           Account
         </h2>
@@ -144,6 +167,58 @@ export function SettingsClient(props: {
             <dt className="text-sm text-zinc-500">Email</dt>
             <dd className="text-sm text-zinc-900">{props.userEmail}</dd>
           </dl>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+          Your data
+        </h2>
+
+        <div className="rounded-lg border border-zinc-200 bg-white p-4">
+          <h3 className="text-sm font-medium text-zinc-900">Export everything</h3>
+          <p className="mt-1 text-sm text-zinc-600">
+            Downloads a JSON file with your profile, rate card, contacts, deals, emails,
+            facts, and tasks. OAuth tokens are excluded — they are credentials, not data.
+          </p>
+          <a
+            href="/api/account/export"
+            download
+            className="mt-3 inline-block rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            Download my data
+          </a>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50/50 p-4">
+          <h3 className="text-sm font-medium text-rose-800">Delete account</h3>
+          <p className="mt-1 text-sm text-rose-700">
+            Removes your account and every contact, deal, email, fact, and task in it. This
+            cannot be undone and there is no backup of it on our side.
+          </p>
+
+          {deleteError && (
+            <div className="mt-3 rounded-md bg-white px-3 py-2 text-xs text-rose-700">
+              {deleteError}
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <input
+              value={confirmWord}
+              onChange={(e) => setConfirmWord(e.target.value)}
+              placeholder={`Type ${DELETE_CONFIRMATION_WORD} to confirm`}
+              aria-label={`Type ${DELETE_CONFIRMATION_WORD} to confirm account deletion`}
+              className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-rose-300 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+            />
+            <button
+              onClick={() => void handleDelete()}
+              disabled={!canDelete}
+              className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {deleting ? "Deleting…" : "Permanently delete"}
+            </button>
+          </div>
         </div>
       </section>
     </div>

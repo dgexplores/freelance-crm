@@ -59,9 +59,24 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold text-zinc-900">Your rights</h2>
           <p className="mt-2">
-            You may request export or deletion of your account and all associated data at any time
-            by contacting us. Deleting your account removes your contacts, deals, emails, facts,
-            tasks, and stored tokens.
+            You can export or delete your account and all associated data yourself, at any time,
+            from the <strong>Your data</strong> section of your settings page. The export is a JSON
+            file containing your profile, rate card, contacts, deals, emails, facts, and tasks —
+            OAuth tokens are excluded, because they are credentials rather than your data. Deleting
+            your account removes your contacts, deals, emails, facts, tasks, and stored tokens, and
+            cannot be undone.
+          </p>
+          <p className="mt-2">
+            You can also{" "}
+            <a
+              href="https://myaccount.google.com/permissions"
+              className="text-zinc-900 underline"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              revoke this app&apos;s access to your Google account
+            </a>{" "}
+            directly, which stops all future imports immediately.
           </p>
         </section>
 

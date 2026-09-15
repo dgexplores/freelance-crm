@@ -10,8 +10,13 @@ import { safeActionMessage } from "@/lib/errors";
 import { rateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
-export const DEAL_STAGES = ["INBOX", "QUALIFIED", "PROPOSAL", "WON", "LOST"] as const;
-export type DealStageValue = (typeof DEAL_STAGES)[number];
+/**
+ * Pipeline stages, in order. Module-private on purpose: a `"use server"` file
+ * may only export async functions, so exporting this value would fail the
+ * build. Nothing outside this module needs it.
+ */
+const DEAL_STAGES = ["INBOX", "QUALIFIED", "PROPOSAL", "WON", "LOST"] as const;
+type DealStageValue = (typeof DEAL_STAGES)[number];
 
 export type ActionResult = {
   ok: boolean;

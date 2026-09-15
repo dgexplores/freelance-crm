@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NotFoundError } from "@/lib/errors";
-import type { Deal, DealStage } from "@prisma/client";
+import type { Deal } from "@prisma/client";
+import { NUDGE_STAGES, idleDaysSince, isIdleFor, lastActivityAt } from "@/lib/staleness";
 
-export const NUDGE_STAGES: DealStage[] = ["INBOX", "QUALIFIED"];
-export const PROPOSAL_STAGES: DealStage[] = ["PROPOSAL"];
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+// Re-exported so existing importers (nudge.ts, scheduler.ts) keep working while
+// the definitions live in the Prisma-free `@/lib/staleness` module.
+export { NUDGE_STAGES };
 
 export interface DealContext {
   deal: Deal;
@@ -90,15 +90,15 @@ export async function loadDealContext(userId: string, dealId: string): Promise<D
 export function isStaleDeal(
   ctx: DealContext,
   days: number,
-  stages: DealStage[] = NUDGE_STAGES,
+  stages: readonly string[] = NUDGE_STAGES,
 ): boolean {
   if (!stages.includes(ctx.deal.stage)) return false;
-  const cutoff = Date.now() - days * DAY_MS;
-  return ctx.lastActivityAt.getTime() < cutoff;
+  // Uses the already-computed ctx.lastActivityAt rather than recomputing it.
+  return isIdleFor(ctx.lastActivityAt, days);
 }
 
 export function idleDays(ctx: DealContext): number {
-  return Math.max(0, Math.floor((Date.now() - ctx.lastActivityAt.getTime()) / DAY_MS));
+  return idleDaysSince(ctx.lastActivityAt);
 }
 
 export function lastActivity(
@@ -106,12 +106,11 @@ export function lastActivity(
   lastContact: Date | null,
   emails: Array<{ receivedAt: Date }>,
 ): Date {
-  const signals: number[] = [];
-  if (lastContact) signals.push(lastContact.getTime());
-  if (emails[0]) signals.push(emails[0].receivedAt.getTime());
-  const floor = deal.createdAt.getTime();
-  const latest = signals.length ? Math.max(...signals) : floor;
-  return new Date(Math.max(latest, floor));
+  return lastActivityAt({
+    createdAt: deal.createdAt,
+    lastContact,
+    latestEmailAt: emails[0]?.receivedAt ?? null,
+  });
 }
 
 export function truncate(text: string | null | undefined, max = 1200): string {

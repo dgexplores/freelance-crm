@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -18,29 +18,31 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
+  SORT_KEYS,
+  SORT_LABELS,
+  dealIdleDays,
+  dealIsStale,
+  filterDeals,
+  sortDeals,
+  type FilterableDeal,
+  type SortKey,
+} from "@/lib/board-filter";
+import {
   moveDealAction,
   importGmailAction,
   scheduleStaleFollowUpsAction,
 } from "@/app/board/actions";
 
-type DealCard = {
+type DealCard = FilterableDeal & {
   id: string;
-  title: string;
-  stage: string;
-  whyInPipeline: string | null;
-  value: number | null;
   wonAt: string | null;
-  createdAt: string;
   updatedAt: string;
-  contact: { name: string | null; email: string; lastContact: string | null };
-  latestEmail: {
-    subject: string;
-    fromAddr: string;
-    receivedAt: string;
-  } | null;
 };
 
 const STAGES = ["INBOX", "QUALIFIED", "PROPOSAL", "WON", "LOST"] as const;
+
+/** Stages that are still in play — used for the "open pipeline" total. */
+const OPEN_STAGES: readonly string[] = ["INBOX", "QUALIFIED", "PROPOSAL"];
 
 const STAGE_NOTES: Record<(typeof STAGES)[number], string> = {
   INBOX: "New inbound contact",
@@ -58,12 +60,34 @@ const STAGE_COLORS: Record<(typeof STAGES)[number], string> = {
   LOST: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+/**
+ * Filter chips are styled from a lookup map of literal class strings, never
+ * interpolated. Tailwind v4 scans source text for complete class names, so
+ * `bg-${x}-600` compiles to nothing.
+ */
+const STAGE_CHIP_ACTIVE: Record<string, string> = {
+  ALL: "border-zinc-900 bg-zinc-900 text-white",
+  INBOX: "border-zinc-500 bg-zinc-700 text-white",
+  QUALIFIED: "border-sky-600 bg-sky-600 text-white",
+  PROPOSAL: "border-violet-600 bg-violet-600 text-white",
+  WON: "border-emerald-600 bg-emerald-600 text-white",
+  LOST: "border-rose-600 bg-rose-600 text-white",
+};
+const STAGE_CHIP_IDLE =
+  "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-100";
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
+}
+
+/** Explicit locale so the server and client render identical strings. */
+function fmtMoney(value: number | null): string {
+  if (value === null) return "—";
+  return `$${value.toLocaleString("en-US")}`;
 }
 
 function MoveButtons({ deal }: { deal: DealCard }) {
@@ -139,7 +163,10 @@ function MoveButtons({ deal }: { deal: DealCard }) {
   );
 }
 
-function CardFace({ deal }: { deal: DealCard }) {
+function CardFace({ deal, nowMs }: { deal: DealCard; nowMs: number }) {
+  const stale = dealIsStale(deal, nowMs);
+  const idle = dealIdleDays(deal, nowMs);
+
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
       <div className="mb-1 flex items-start justify-between gap-2">
@@ -162,9 +189,21 @@ function CardFace({ deal }: { deal: DealCard }) {
           Last: {deal.latestEmail.subject} · {fmtDate(deal.latestEmail.receivedAt)}
         </p>
       )}
-      <p className="mt-0.5 text-[11px] text-zinc-400">
-        Last contact: {fmtDate(deal.contact.lastContact)}
-      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-zinc-400">
+          Last contact: {fmtDate(deal.contact.lastContact)}
+        </span>
+        {deal.value !== null && (
+          <span className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700">
+            {fmtMoney(deal.value)}
+          </span>
+        )}
+        {stale && (
+          <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+            {idle}d idle
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -175,10 +214,12 @@ function DraggableDealCard({
   deal,
   index,
   disabled,
+  nowMs,
 }: {
   deal: DealCard;
   index: number;
   disabled: boolean;
+  nowMs: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
@@ -198,7 +239,7 @@ function DraggableDealCard({
       className={`animate-fade-up ${isDragging ? "z-20 opacity-60" : ""}`}
     >
       <Link href={`/board/${deal.id}`} className="block touch-none">
-        <CardFace deal={deal} />
+        <CardFace deal={deal} nowMs={nowMs} />
       </Link>
     </div>
   );
@@ -207,19 +248,25 @@ function DraggableDealCard({
 function Column({
   stage,
   count,
+  total,
+  dragging,
   children,
 }: {
   stage: (typeof STAGES)[number];
   count: number;
+  total: number;
+  dragging: boolean;
   children: ReactNode;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `col:${stage}` });
+  const narrowed = count !== total;
+
   return (
     <section className="flex flex-col">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">{stage}</h2>
         <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600">
-          {count}
+          {narrowed ? `${count}/${total}` : count}
         </span>
       </div>
       <p className="mb-2 text-[11px] text-zinc-400">{STAGE_NOTES[stage]}</p>
@@ -232,8 +279,23 @@ function Column({
         }`}
       >
         {children}
+        {count === 0 && (
+          <p className="p-2 text-center text-xs text-zinc-400">
+            {dragging ? "Drop here" : narrowed ? "No matches" : "Empty"}
+          </p>
+        )}
       </div>
     </section>
+  );
+}
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-zinc-400">{label}</p>
+      <p className="text-base font-semibold text-zinc-900">{value}</p>
+      {hint && <p className="text-[11px] text-zinc-500">{hint}</p>}
+    </div>
   );
 }
 
@@ -243,6 +305,8 @@ export function BoardClient(props: {
   factCount: number;
   deals: DealCard[];
   staleCount: number;
+  /** Server clock, so SSR and hydration agree on staleness. */
+  nowMs: number;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(null);
@@ -254,6 +318,11 @@ export function BoardClient(props: {
   const [syncedFrom, setSyncedFrom] = useState(props.deals);
   const [moving, setMoving] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState<string>("ALL");
+  const [staleOnly, setStaleOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("recent");
 
   if (props.deals !== syncedFrom) {
     setSyncedFrom(props.deals);
@@ -327,12 +396,53 @@ export function BoardClient(props: {
     router.replace("/");
   }
 
+  const nowMs = props.nowMs;
+
+  // Unfiltered totals for the metrics strip — the headline numbers should
+  // describe the whole pipeline, not whatever the current filter happens to show.
+  const metrics = useMemo(() => {
+    let openValue = 0;
+    let openCount = 0;
+    let unpriced = 0;
+    let wonValue = 0;
+    let wonCount = 0;
+    let lostCount = 0;
+
+    for (const deal of deals) {
+      if (deal.stage === "WON") {
+        wonCount += 1;
+        wonValue += deal.value ?? 0;
+      } else if (deal.stage === "LOST") {
+        lostCount += 1;
+      } else if (OPEN_STAGES.includes(deal.stage)) {
+        openCount += 1;
+        openValue += deal.value ?? 0;
+        if (deal.value === null) unpriced += 1;
+      }
+    }
+
+    return { openValue, openCount, unpriced, wonValue, wonCount, lostCount };
+  }, [deals]);
+
+  const visible = useMemo(
+    () =>
+      sortDeals(
+        filterDeals(deals, { query, stage: stageFilter, staleOnly }, nowMs),
+        sortKey,
+        nowMs,
+      ),
+    [deals, stageFilter, query, staleOnly, sortKey, nowMs],
+  );
+
   const columns = STAGES.map((stage) => ({
     stage,
-    deals: deals.filter((d) => d.stage === stage),
+    all: deals.filter((d) => d.stage === stage).length,
+    deals: visible.filter((d) => d.stage === stage),
   }));
 
   const activeDeal = activeId ? deals.find((d) => d.id === activeId) ?? null : null;
+  const filtering = query.trim() !== "" || stageFilter !== "ALL" || staleOnly;
+  const stageTabs = ["ALL", ...STAGES];
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -373,45 +483,154 @@ export function BoardClient(props: {
             {error ?? status}
           </p>
         )}
+
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat
+            label="Open pipeline"
+            value={fmtMoney(metrics.openValue)}
+            hint={`${metrics.openCount} deal${metrics.openCount !== 1 ? "s" : ""}${
+              metrics.unpriced > 0 ? ` · ${metrics.unpriced} unpriced` : ""
+            }`}
+          />
+          <Stat
+            label="Won"
+            value={fmtMoney(metrics.wonValue)}
+            hint={`${metrics.wonCount} deal${metrics.wonCount !== 1 ? "s" : ""}`}
+          />
+          <Stat label="Lost" value={String(metrics.lostCount)} hint="closed out" />
+          <Stat label="Facts" value={String(props.factCount)} hint="evidence recorded" />
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search deals, contacts, evidence…"
+            aria-label="Search deals"
+            className="w-64 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+
+          <div className="flex flex-wrap items-center gap-1">
+            {stageTabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setStageFilter(tab)}
+                aria-pressed={stageFilter === tab}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  stageFilter === tab
+                    ? STAGE_CHIP_ACTIVE[tab] ?? STAGE_CHIP_ACTIVE.ALL
+                    : STAGE_CHIP_IDLE
+                }`}
+              >
+                {tab === "ALL" ? "All" : tab}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setStaleOnly((v) => !v)}
+            aria-pressed={staleOnly}
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+              staleOnly
+                ? "border-amber-600 bg-amber-600 text-white"
+                : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+            }`}
+          >
+            Needs follow-up ({props.staleCount})
+          </button>
+
+          <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
+            Sort
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 focus:border-zinc-500 focus:outline-none"
+            >
+              {SORT_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {SORT_LABELS[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {filtering && (
+            <button
+              onClick={() => {
+                setQuery("");
+                setStageFilter("ALL");
+                setStaleOnly(false);
+              }}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
         <p className="text-[11px] text-zinc-400 mb-6">
+          {filtering
+            ? `Showing ${visible.length} of ${deals.length} deals.`
+            : `${deals.length} deal${deals.length !== 1 ? "s" : ""} in the pipeline.`}
+          {" · "}
           {props.gmailSyncStartedAt
             ? `Forward-only sync boundary: ${new Date(props.gmailSyncStartedAt).toLocaleString()} — only newer mail is imported.`
             : "No import run yet. First import reads at most the last day, then only newer mail."}
-          {" · "}
-          {props.factCount} facts recorded
         </p>
       </div>
 
       <main className="mx-auto max-w-7xl px-6 pb-6">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onDragCancel={() => setActiveId(null)}
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
-            {columns.map(({ stage, deals: columnDeals }) => (
-              <Column key={stage} stage={stage} count={columnDeals.length}>
-                {columnDeals.length === 0 ? (
-                  <p className="p-2 text-center text-xs text-zinc-400">
-                    {activeDeal ? "Drop here" : "Empty"}
-                  </p>
-                ) : (
-                  columnDeals.map((deal, i) => (
+        {visible.length === 0 && deals.length > 0 ? (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center">
+            <p className="text-sm text-zinc-600">No deals match these filters.</p>
+            <button
+              onClick={() => {
+                setQuery("");
+                setStageFilter("ALL");
+                setStaleOnly(false);
+              }}
+              className="mt-3 rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => setActiveId(null)}
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
+              {columns.map(({ stage, all, deals: columnDeals }) => (
+                <Column
+                  key={stage}
+                  stage={stage}
+                  count={columnDeals.length}
+                  total={all}
+                  dragging={Boolean(activeDeal)}
+                >
+                  {columnDeals.map((deal, i) => (
                     <div key={deal.id}>
-                      <DraggableDealCard deal={deal} index={i} disabled={moving} />
+                      <DraggableDealCard
+                        deal={deal}
+                        index={i}
+                        disabled={moving}
+                        nowMs={nowMs}
+                      />
                       {/* Keyboard/button fallback stays inside each card page */}
                       <div className="-mt-2 pl-1">
                         <MoveButtons deal={deal} />
                       </div>
                     </div>
-                  ))
-                )}
-              </Column>
-            ))}
-          </div>
-        </DndContext>
+                  ))}
+                </Column>
+              ))}
+            </div>
+          </DndContext>
+        )}
       </main>
     </div>
   );

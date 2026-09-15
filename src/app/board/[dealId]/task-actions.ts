@@ -5,15 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
 import { BadRequestError, safeActionMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
+import { TASK_KINDS, type TaskKind } from "@/lib/tasks";
 
 export type ActionResult<T = unknown> = {
   ok: boolean;
   message: string;
   data?: T;
 };
-
-export const TASK_KINDS = ["follow_up", "brief", "proposal"] as const;
-export type TaskKind = (typeof TASK_KINDS)[number];
 
 const MAX_REASON_LENGTH = 500;
 /** Far enough out to be a typo, near enough to be useless — reject both. */

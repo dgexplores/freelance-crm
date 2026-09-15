@@ -79,6 +79,11 @@ export default async function BoardPage() {
       factCount={factCount}
       deals={serializable}
       staleCount={staleDeals.length}
+      // Staleness is time-dependent, so the clock has to come from one place.
+      // Computing Date.now() independently on the server and in the browser
+      // would let a deal cross the 5-day line between the two renders and
+      // produce a hydration mismatch.
+      nowMs={Date.now()}
     />
   );
 }
