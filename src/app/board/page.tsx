@@ -1,7 +1,6 @@
-import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
 import { BoardClient } from "@/app/board/board-client";
-import { listStaleDeals } from "@/lib/ai/nudge";
+import { loadBoardData } from "@/app/board/board-data";
 
 export const metadata = { title: "Pipeline | Inbox CRM" };
 
@@ -9,45 +8,11 @@ export default async function BoardPage() {
   const user = await getUser();
   if (!user) return null; // middleware handles redirect
 
-  const [deals, userData, factCount, staleDeals] = await Promise.all([
-    prisma.deal.findMany({
-      where: { userId: user.id },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        stage: true,
-        whyInPipeline: true,
-        value: true,
-        wonAt: true,
-        createdAt: true,
-        updatedAt: true,
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            lastContact: true,
-            emails: {
-              select: { subject: true, fromAddr: true, receivedAt: true },
-              orderBy: { receivedAt: "desc" },
-              take: 1,
-            },
-          },
-        },
-      },
-    }),
-    prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        email: true,
-        name: true,
-        gmailSyncStartedAt: true,
-      },
-    }),
-    prisma.fact.count({ where: { userId: user.id } }),
-    listStaleDeals(user.id, 5),
-  ]);
+  // Bounded: a stalled DB rejects to error.tsx (retry) instead of holding
+  // Suspense open until the platform closes the stream (React #412).
+  const [deals, userData, factCount, staleDeals] = await loadBoardData(user.id).then(
+    (d) => [d.deals, d.userData, d.factCount, d.staleDeals] as const,
+  );
 
   const serializable = deals.map((deal) => ({
     id: deal.id,

@@ -20,7 +20,11 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+            // Next.js App Router boots hydration from inline flight scripts,
+            // so script-src must allow 'unsafe-inline' until a nonce
+            // architecture lands. Locking to 'self' silently kills hydration.
+            value:
+              "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
           },
           {
             key: "Strict-Transport-Security",
