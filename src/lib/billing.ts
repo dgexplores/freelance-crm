@@ -1,7 +1,9 @@
 import "server-only";
 import Stripe from "stripe";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 
 export const FREE_AI_QUOTA = 20;
 export const PRO_AI_QUOTA = 500;
@@ -49,6 +51,16 @@ function periodExpired(periodStart: Date): boolean {
   return Date.now() - periodStart.getTime() >= PERIOD_MS;
 }
 
+/** True when the Subscription table hasn't been pushed yet (P2021). */
+function isMissingTable(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021";
+}
+
+function degraded(): { used: number; limit: number; status: string; pro: boolean } {
+  logger.warn("Billing degraded: Subscription table missing — run `npm run db:push`.");
+  return { used: 0, limit: FREE_AI_QUOTA, status: "free", pro: false };
+}
+
 /** Current usage snapshot for settings UI. */
 export async function getUsage(userId: string): Promise<{
   used: number;
@@ -56,10 +68,15 @@ export async function getUsage(userId: string): Promise<{
   status: string;
   pro: boolean;
 }> {
-  const sub = await getSubscription(userId);
-  const used = sub && !periodExpired(sub.periodStart) ? sub.aiUsed : 0;
-  const status = sub?.status ?? "free";
-  return { used, limit: quotaFor(status), status, pro: status === "active" };
+  try {
+    const sub = await getSubscription(userId);
+    const used = sub && !periodExpired(sub.periodStart) ? sub.aiUsed : 0;
+    const status = sub?.status ?? "free";
+    return { used, limit: quotaFor(status), status, pro: status === "active" };
+  } catch (err) {
+    if (isMissingTable(err)) return degraded();
+    throw err;
+  }
 }
 
 /**
@@ -77,17 +94,25 @@ export async function checkAiQuota(userId: string): Promise<void> {
  * documented; over-counting favors the house by at most one unit per click.
  */
 export async function recordAiUsage(userId: string): Promise<void> {
-  const sub = await getSubscription(userId);
-  if (!sub || periodExpired(sub.periodStart)) {
-    await prisma.subscription.upsert({
+  try {
+    const sub = await getSubscription(userId);
+    if (!sub || periodExpired(sub.periodStart)) {
+      await prisma.subscription.upsert({
+        where: { userId },
+        update: { aiUsed: 1, periodStart: new Date() },
+        create: { userId, aiUsed: 1 },
+      });
+      return;
+    }
+    await prisma.subscription.update({
       where: { userId },
-      update: { aiUsed: 1, periodStart: new Date() },
-      create: { userId, aiUsed: 1 },
+      data: { aiUsed: { increment: 1 } },
     });
-    return;
+  } catch (err) {
+    if (isMissingTable(err)) {
+      degraded();
+      return;
+    }
+    throw err;
   }
-  await prisma.subscription.update({
-    where: { userId },
-    data: { aiUsed: { increment: 1 } },
-  });
 }
