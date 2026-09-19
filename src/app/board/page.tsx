@@ -13,9 +13,8 @@ export default async function BoardPage() {
 
   // Bounded: a stalled DB rejects to error.tsx (retry) instead of holding
   // Suspense open until the platform closes the stream (React #412).
-  const [deals, userData, factCount, staleDeals] = await loadBoardData(user.id).then(
-    (d) => [d.deals, d.userData, d.factCount, d.staleDeals] as const,
-  );
+  const data = await loadBoardData(user.id);
+  const { deals, userData, factCount, staleDeals, staleDays } = data;
 
   const serializable = deals.map((deal) => ({
     id: deal.id,
@@ -47,6 +46,7 @@ export default async function BoardPage() {
       factCount={factCount}
       deals={serializable}
       staleCount={staleDeals.length}
+      staleDays={staleDays}
     />
   );
 }

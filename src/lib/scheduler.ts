@@ -72,10 +72,9 @@ export async function scheduleFollowUpsForUser(
 /**
  * Run the scheduler across every user with pipeline deals.
  * Used by the daily cron endpoint, which has no session context.
+ * Each user runs on their own stale-day threshold; opted-out users skip.
  */
-export async function scheduleFollowUpsAllUsers(
-  days: number = DEFAULT_STALE_DAYS,
-): Promise<AllUsersSchedulerResult> {
+export async function scheduleFollowUpsAllUsers(): Promise<AllUsersSchedulerResult> {
   const rows = await prisma.deal.findMany({
     where: { stage: { in: ["INBOX", "QUALIFIED"] } },
     select: { userId: true },
@@ -87,6 +86,15 @@ export async function scheduleFollowUpsAllUsers(
 
   for (const { userId } of rows) {
     try {
+      const prefs = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { staleDays: true, autoFollowUp: true },
+      });
+      if (prefs && !prefs.autoFollowUp) continue;
+      const days =
+        prefs && Number.isInteger(prefs.staleDays) && prefs.staleDays >= 1 && prefs.staleDays <= 30
+          ? prefs.staleDays
+          : DEFAULT_STALE_DAYS;
       const result = await scheduleFollowUpsForUser(userId, days);
       scheduled += result.scheduled;
       errors.push(...result.errors.map((e) => `[user ${userId}] ${e}`));

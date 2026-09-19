@@ -28,6 +28,8 @@ model User {
   image              String? // better-auth avatar
   rateCard           String? // markdown: rates, services, terms
   gmailSyncStartedAt DateTime? // forward-only import boundary (first run)
+  staleDays          Int      @default(5) // idle days before a deal counts as stale (1-30)
+  autoFollowUp       Boolean  @default(true) // daily cron may schedule follow-ups
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   contacts           Contact[]

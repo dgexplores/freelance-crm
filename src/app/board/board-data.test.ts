@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/ai/nudge", () => ({
   listStaleDeals: vi.fn(),
+  DEFAULT_STALE_DAYS: 5,
 }));
 
 import { prisma } from "@/lib/prisma";

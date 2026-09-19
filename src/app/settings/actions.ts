@@ -38,3 +38,83 @@ export async function updateRateCardAction(rateCard: string): Promise<ActionResu
     return { ok: false, message };
   }
 }
+
+export async function updateProfileAction(name: string): Promise<ActionResult> {
+  const user = await getUser();
+  if (!user) return { ok: false, message: "Not authenticated." };
+  const clean = typeof name === "string" ? name.trim().slice(0, 120) : "";
+  try {
+    await prisma.user.update({ where: { id: user.id }, data: { name: clean || null } });
+    revalidatePath("/settings");
+    revalidatePath("/board");
+    return { ok: true, message: "Profile saved." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Failed to save profile." };
+  }
+}
+
+export async function updatePreferencesAction(
+  staleDays: number,
+  autoFollowUp: boolean,
+): Promise<ActionResult> {
+  const user = await getUser();
+  if (!user) return { ok: false, message: "Not authenticated." };
+  const floored = Math.floor(staleDays);
+  if (!Number.isFinite(staleDays) || floored < 1 || floored > 30) {
+    return { ok: false, message: "Stale threshold must be 1–30 days." };
+  }
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { staleDays: floored, autoFollowUp: Boolean(autoFollowUp) },
+    });
+    revalidatePath("/settings");
+    revalidatePath("/board");
+    return { ok: true, message: "Preferences saved." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Failed to save preferences." };
+  }
+}
+
+/** Disconnect Google: drop OAuth accounts so the next Gmail action re-auths. */
+export async function disconnectGmailAction(): Promise<ActionResult> {
+  const user = await getUser();
+  if (!user) return { ok: false, message: "Not authenticated." };
+  try {
+    await prisma.account.deleteMany({ where: { userId: user.id, providerId: "google" } });
+    await prisma.user.update({ where: { id: user.id }, data: { gmailSyncStartedAt: null } });
+    revalidatePath("/settings");
+    revalidatePath("/board");
+    return { ok: true, message: "Gmail disconnected. Reconnect on next import." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Failed to disconnect." };
+  }
+}
+
+/**
+ * Delete all pipeline data (deals, tasks, emails, facts, contacts).
+ * Keeps the user row, rate card, and preferences. Requires typed confirm.
+ */
+export async function deletePipelineDataAction(confirm: string): Promise<ActionResult> {
+  const user = await getUser();
+  if (!user) return { ok: false, message: "Not authenticated." };
+  if (confirm !== "DELETE") {
+    return { ok: false, message: 'Type DELETE to confirm.' };
+  }
+  try {
+    const deals = await prisma.deal.findMany({ where: { userId: user.id }, select: { id: true } });
+    const dealIds = deals.map((d) => d.id);
+    await prisma.$transaction([
+      prisma.task.deleteMany({ where: { dealId: { in: dealIds } } }),
+      prisma.deal.deleteMany({ where: { userId: user.id } }),
+      prisma.email.deleteMany({ where: { userId: user.id } }),
+      prisma.fact.deleteMany({ where: { userId: user.id } }),
+      prisma.contact.deleteMany({ where: { userId: user.id } }),
+    ]);
+    revalidatePath("/settings");
+    revalidatePath("/board");
+    return { ok: true, message: "Pipeline data deleted." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Delete failed." };
+  }
+}

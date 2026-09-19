@@ -317,6 +317,7 @@ export function BoardClient(props: {
   factCount: number;
   deals: DealCard[];
   staleCount: number;
+  staleDays: number;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(null);
@@ -446,7 +447,7 @@ export function BoardClient(props: {
           <div className="flex items-center gap-3">
             {props.staleCount > 0 && (
               <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 text-xs font-medium">
-                {props.staleCount} deal{props.staleCount !== 1 ? "s" : ""} need follow-up
+                {props.staleCount} deal{props.staleCount !== 1 ? "s" : ""} idle {props.staleDays}d+
               </span>
             )}
             <button

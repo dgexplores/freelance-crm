@@ -19,9 +19,14 @@ export default async function SettingsPage() {
       name: true,
       rateCard: true,
       gmailSyncStartedAt: true,
+      staleDays: true,
+      autoFollowUp: true,
     },
   });
   const usage = await getUsage(user.id);
+  const gmailConnected = await prisma.account.count({
+    where: { userId: user.id, providerId: "google" },
+  });
 
   return (
     <SettingsClient
@@ -29,6 +34,9 @@ export default async function SettingsPage() {
       userName={userData?.name ?? ""}
       rateCard={userData?.rateCard ?? ""}
       gmailSyncStartedAt={userData?.gmailSyncStartedAt?.toISOString() ?? null}
+      staleDays={userData?.staleDays ?? 5}
+      autoFollowUp={userData?.autoFollowUp ?? true}
+      gmailConnected={gmailConnected > 0}
       billing={{ ...usage, enabled: billingEnabled() }}
     />
   );

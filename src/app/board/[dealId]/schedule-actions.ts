@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getUser } from "@/lib/session";
+import { prisma } from "@/lib/prisma";
 import { scheduleFollowUpsForUser, type SchedulerResult } from "@/lib/scheduler";
 import { DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 
@@ -10,9 +11,10 @@ export type { SchedulerResult };
 /**
  * Schedule follow-up nudges for the signed-in user's stale deals.
  * Session-scoped wrapper around the shared scheduler in @/lib/scheduler.
+ * Defaults to the user's own stale-day threshold when `days` is omitted.
  */
 export async function scheduleStaleFollowUpsAction(
-  days: number = DEFAULT_STALE_DAYS,
+  days?: number,
 ): Promise<SchedulerResult & { ok: boolean; message: string }> {
   const user = await getUser();
   if (!user) {
@@ -20,7 +22,16 @@ export async function scheduleStaleFollowUpsAction(
   }
 
   try {
-    const floored = Math.floor(days);
+    let floored: number;
+    if (days === undefined) {
+      const prefs = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { staleDays: true },
+      });
+      floored = prefs?.staleDays ?? DEFAULT_STALE_DAYS;
+    } else {
+      floored = Math.floor(days);
+    }
     if (!Number.isFinite(days) || floored < 1 || floored > 30) {
       const message = "Invalid days parameter. Must be an integer between 1 and 30.";
       return { ok: false, message, scheduled: 0, errors: [message] };
