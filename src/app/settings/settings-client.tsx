@@ -60,9 +60,11 @@ export function SettingsClient(props: {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8 pt-20">
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+    <div className="min-h-screen bg-paper">
+      <div className="max-w-3xl mx-auto px-6 py-8 pt-24">
+      <h1 className="font-display mb-8 text-3xl font-bold tracking-tight text-ink">Settings</h1>
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.05)]">
+        <h2 className="font-display mb-3 text-lg font-bold text-ink">
           Rate Card
         </h2>
         <p className="mb-4 text-sm text-zinc-600">
@@ -93,7 +95,7 @@ export function SettingsClient(props: {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+            className="rounded-full bg-ink px-5 py-2 text-sm font-semibold text-white transition-transform duration-300 hover:scale-105 disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save rate card"}
           </button>
@@ -108,8 +110,8 @@ export function SettingsClient(props: {
         </div>
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.05)]">
+        <h2 className="font-display mb-3 text-lg font-bold text-ink">
           Gmail Sync
         </h2>
         <div className="rounded-lg border border-zinc-200 bg-white p-4">
@@ -133,8 +135,8 @@ export function SettingsClient(props: {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.05)]">
+        <h2 className="font-display mb-3 text-lg font-bold text-ink">
           Account
         </h2>
         <div className="rounded-lg border border-zinc-200 bg-white p-4">
@@ -146,6 +148,7 @@ export function SettingsClient(props: {
           </dl>
         </div>
       </section>
+      </div>
     </div>
   );
 }

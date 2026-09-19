@@ -10,7 +10,11 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-outfit);
+  --font-display: "Satoshi", var(--font-outfit), var(--font-geist-sans), sans-serif;
+  --color-ink: #131316;
+  --color-paper: #f7f6f3;
+  --color-lime: #d9f54c;
+  --color-ember: #ff5c38;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -76,7 +80,8 @@ body {
 /* --- Landing ---------------------------------------------------------- */
 
 .font-display {
-  font-family: var(--font-outfit), var(--font-geist-sans), sans-serif;
+  font-family: "Satoshi", var(--font-outfit), var(--font-geist-sans), sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .grain::before {

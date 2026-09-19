@@ -31,29 +31,46 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-6">
-      <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-zinc-900">Sign in</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Use Google to open your inbox-first pipeline.
-        </p>
-        <button
-          onClick={signInWithGoogle}
-          disabled={busy}
-          className="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-40"
-        >
-          <GoogleIcon />
-          {busy ? "Redirecting…" : "Continue with Google"}
-        </button>
-        <p className="mt-4 text-center text-[11px] text-zinc-400">
-          The CRM reads your inbox (read-only) and never sends, moves, or
-          deletes mail.
-        </p>
-        {error && (
-          <p className="mt-4 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            {error}
+    <div className="grid min-h-screen grid-cols-1 bg-paper md:grid-cols-2">
+      <div className="flex items-center justify-center px-6 py-16">
+        <div className="w-full max-w-sm">
+          <h1 className="font-display text-4xl font-bold tracking-tight text-ink">Sign in</h1>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">
+            Use Google to open your inbox-first pipeline.
           </p>
-        )}
+          <button
+            onClick={signInWithGoogle}
+            disabled={busy}
+            className="mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-ink px-4 py-3 text-sm font-semibold text-white transition-transform duration-300 hover:scale-[1.02] disabled:opacity-40"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white">
+              <GoogleIcon />
+            </span>
+            {busy ? "Redirecting…" : "Continue with Google"}
+          </button>
+          <p className="mt-5 text-[11px] leading-5 text-zinc-400">
+            The CRM reads your inbox (read-only) and never sends, moves, or
+            deletes mail.
+          </p>
+          {error && (
+            <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="relative hidden overflow-hidden md:block" aria-hidden="true">
+        <div
+          className="absolute inset-0 bg-cover bg-center grayscale contrast-125"
+          style={{ backgroundImage: "url(https://picsum.photos/seed/signin-desk/1200/1400)" }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-paper via-transparent to-transparent" />
+        <figure className="absolute bottom-16 left-16 right-24 rotate-[-2deg] rounded-3xl border border-white/30 bg-white/80 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.25)] backdrop-blur">
+          <p className="font-display text-xl font-bold text-ink">“Nothing falls through.”</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
+            Auto-scheduled follow-ups with reasons. Stale deals flag themselves.
+          </p>
+        </figure>
       </div>
     </div>
   );

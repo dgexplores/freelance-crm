@@ -76,8 +76,31 @@ export function ScaleMedia({ children, className = "" }: { children: ReactNode; 
   );
 }
 
-/** Gentle rise-in on first scroll into view. */
-export function RiseIn({ children, className = "", delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+/** Pin children while `end` scroll distance passes (GSAP ScrollTrigger pin). */
+export function PinWrap({ children, className = "", distance = 400 }: { children: ReactNode; className?: string; distance?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const ctx = gsap.context(() => {
+      ScrollTrigger.create({
+        trigger: el.parentElement,
+        start: "top 20%",
+        end: `+=${distance}`,
+        pin: el,
+        pinSpacing: true,
+      });
+    }, el);
+    return () => ctx.revert();
+  }, [distance]);
+
+  return (
+    <div ref={ref} className={className}>
+      {children}
+    </div>
+  );
+}export function RiseIn({ children, className = "", delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {

@@ -220,11 +220,16 @@ function Column({
   children: ReactNode;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `col:${stage}` });
+  const won = stage === "WON";
   return (
     <section className="flex flex-col">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">{stage}</h2>
-        <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600">
+        <h2 className="font-display text-sm font-bold uppercase tracking-widest text-ink">{stage}</h2>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+            won ? "bg-lime text-ink" : "bg-zinc-200 text-zinc-600"
+          }`}
+        >
           {count}
         </span>
       </div>
@@ -233,8 +238,10 @@ function Column({
         ref={setNodeRef}
         className={`flex flex-1 flex-col gap-3 rounded-xl border p-2 transition-all duration-300 ${
           isOver
-            ? "scale-[1.01] border-zinc-900 bg-zinc-200/80 shadow-[0_8px_28px_rgba(0,0,0,0.12)]"
-            : "border-zinc-200 bg-zinc-100/60"
+            ? "scale-[1.01] border-ink bg-zinc-200/80 shadow-[0_8px_28px_rgba(0,0,0,0.12)]"
+            : won
+              ? "border-lime/60 bg-lime/10"
+              : "border-zinc-200 bg-zinc-100/60"
         }`}
       >
         {children}
@@ -360,11 +367,11 @@ export function BoardClient(props: {
   const activeDeal = activeId ? deals.find((d) => d.id === activeId) ?? null : null;
 
   return (
-    <div className="min-h-screen bg-zinc-50">
+    <div className="min-h-screen bg-paper">
       <div className="mx-auto max-w-7xl px-6 pb-4 pt-20">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-lg font-semibold text-zinc-900">Pipeline</h1>
+            <h1 className="font-display text-xl font-bold tracking-tight text-ink">Pipeline</h1>
             <p className="text-xs text-zinc-500">Signed in as {props.userEmail}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -376,7 +383,7 @@ export function BoardClient(props: {
             <button
               onClick={importMail}
               disabled={busy}
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+              className="rounded-full bg-ink px-5 py-2 text-sm font-semibold text-white transition-transform duration-300 hover:scale-105 disabled:opacity-40"
             >
               {busy ? "Importing…" : "Import Gmail"}
             </button>

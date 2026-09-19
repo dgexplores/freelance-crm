@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { RiseIn, ScaleMedia, ScrubWords } from "@/components/landing/motion";
+import { PinWrap, RiseIn, ScaleMedia, ScrubWords } from "@/components/landing/motion";
+import { HowAccordion } from "@/components/landing/accordion";
 import { Testimonials } from "@/components/landing/testimonials";
 
 export const metadata = {
@@ -183,9 +184,23 @@ export default function Home() {
         />
       </section>
 
+      {/* INTEREST II — horizontal accordion */}
+      <section className="mx-auto w-full max-w-7xl px-6 pb-32 md:pb-48">
+        <RiseIn>
+          <h2 className="font-display max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
+            Hover the work. <InlineImg seed="hover-slices" label="workflow slices" /> Feel each step.
+          </h2>
+        </RiseIn>
+        <RiseIn delay={0.1}>
+          <div className="mt-14">
+            <HowAccordion />
+          </div>
+        </RiseIn>
+      </section>
+
       {/* DESIRE — pinned title + scrolling gallery */}
       <section className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-10 px-6 pb-32 md:grid-cols-[1fr_1.4fr] md:pb-48">
-        <div className="md:sticky md:top-32 md:self-start">
+        <PinWrap distance={520} className="md:self-start">
           <h2 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
             Built for the <InlineImg seed="solo-desk" label="solo freelancer" /> solo seller.
           </h2>
@@ -199,7 +214,7 @@ export default function Home() {
           >
             Try the live board
           </Link>
-        </div>
+        </PinWrap>
         <div className="flex flex-col gap-6">
           {[
             { seed: "gallery-inbox", title: "Import", body: "Forward-only Gmail sync. Nothing touched, everything captured." },
@@ -227,36 +242,52 @@ export default function Home() {
         <Testimonials />
       </section>
 
-      {/* ACTION — massive CTA + footer */}
-      <section className="grain relative overflow-hidden px-6 pb-16 pt-32 text-center md:pt-48">
+      {/* ACTION — asymmetric CTA + footer */}
+      <section className="grain relative overflow-hidden px-6 pb-16 pt-32 md:pt-48">
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-cover bg-center opacity-30 grayscale contrast-125"
           style={{ backgroundImage: "url(https://picsum.photos/seed/closing-deal/1920/800)" }}
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-zinc-950/70 to-zinc-950" />
+        <div className="relative mx-auto grid w-full max-w-7xl items-end gap-10 md:grid-cols-[1.5fr_1fr]">
+          <div className="text-left">
+            <RiseIn>
+              <h2 className="font-display w-full max-w-5xl text-[clamp(2.5rem,5vw,4.75rem)] font-bold leading-[1.02] tracking-tight">
+                Stop copying emails into spreadsheets.
+              </h2>
+            </RiseIn>
+            <RiseIn delay={0.15}>
+              <div className="mt-10 flex flex-wrap items-center gap-4">
+                <Link
+                  href="/board"
+                  className="rounded-full bg-lime px-10 py-4 text-sm font-semibold text-ink shadow-[0_8px_40px_rgba(217,245,76,0.3)] transition-transform duration-300 hover:scale-105"
+                >
+                  Open the board
+                </Link>
+                <Link
+                  href="/sign-in"
+                  className="rounded-full border border-white/30 px-10 py-4 text-sm font-semibold text-white transition-colors duration-300 hover:bg-white hover:text-zinc-950"
+                >
+                  Connect Gmail
+                </Link>
+              </div>
+            </RiseIn>
+          </div>
+          <RiseIn delay={0.2} className="hidden justify-self-end md:block">
+            <figure className="w-72 rotate-3 overflow-hidden rounded-3xl border border-white/20 shadow-[0_24px_80px_rgba(0,0,0,0.5)] transition-transform duration-700 hover:rotate-0">
+              <div
+                className="h-80 bg-cover bg-center grayscale contrast-125"
+                style={{ backgroundImage: "url(https://picsum.photos/seed/won-card/600/800)" }}
+              />
+              <figcaption className="bg-lime px-5 py-4 text-left">
+                <p className="font-display text-lg font-bold text-ink">Deal won</p>
+                <p className="text-sm text-ink/70">Proposal accepted · Monday start</p>
+              </figcaption>
+            </figure>
+          </RiseIn>
+        </div>
         <div className="relative">
-          <RiseIn>
-            <h2 className="font-display mx-auto w-full max-w-6xl text-[clamp(2.5rem,6vw,5.5rem)] font-bold leading-[1.02] tracking-tight">
-              Stop copying emails into spreadsheets.
-            </h2>
-          </RiseIn>
-          <RiseIn delay={0.15}>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-              <Link
-                href="/board"
-                className="rounded-full bg-white px-10 py-4 text-sm font-semibold text-zinc-950 shadow-[0_8px_40px_rgba(255,255,255,0.25)] transition-transform duration-300 hover:scale-105"
-              >
-                Open the board
-              </Link>
-              <Link
-                href="/sign-in"
-                className="rounded-full border border-white/30 px-10 py-4 text-sm font-semibold text-white transition-colors duration-300 hover:bg-white hover:text-zinc-950"
-              >
-                Connect Gmail
-              </Link>
-            </div>
-          </RiseIn>
           <footer className="mx-auto mt-28 flex w-full max-w-7xl flex-col items-center justify-between gap-6 border-t border-white/10 pt-8 text-sm text-zinc-500 sm:flex-row">
             <span className="font-display font-bold text-white">Inbox CRM</span>
             <div className="flex items-center gap-6">

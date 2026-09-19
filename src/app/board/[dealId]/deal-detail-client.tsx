@@ -475,13 +475,19 @@ export function DealDetailClient(props: {
             {deal.contact.facts.length === 0 ? (
               <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-zinc-500">No facts recorded yet.</div>
             ) : (
-              deal.contact.facts.map((fact) => (
-                <article key={fact.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+              deal.contact.facts.map((fact, i) => (
+                <article
+                  key={fact.id}
+                  style={{ top: `calc(7rem + ${Math.min(i, 8) * 10}px)` }}
+                  className={`sticky rounded-xl border bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] ${
+                    fact.strength === "strong" ? "border-lime/70" : "border-zinc-200"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
                       <p className="text-sm text-zinc-900">{fact.claim}</p>
                       <div className="mt-1 flex items-center gap-2 text-[11px]">
-                        <span className={`inline-block rounded-full px-1.5 py-0.5 ${fact.strength === "strong" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                        <span className={`inline-block rounded-full px-1.5 py-0.5 ${fact.strength === "strong" ? "bg-lime/60 text-ink" : "bg-amber-50 text-amber-700"}`}>
                           {fact.strength}
                         </span>
                         <span className="text-zinc-500">Source: {fact.source}</span>
