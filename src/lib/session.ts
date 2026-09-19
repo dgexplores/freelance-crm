@@ -10,12 +10,11 @@ export const getSession = cache(async () => {
 
 export const DEV_BYPASS_EMAIL = "dev@local.test";
 
-/** Dev-only auth bypass. Enabled ONLY with DEV_BYPASS_AUTH=true outside production. */
+/** Dev/demo bypass. Enabled ONLY with DEV_BYPASS_AUTH=true. Do NOT set in real prod. */
 function devBypassEnabled() {
   if (process.env["DEV_BYPASS_AUTH"] !== "true") return false;
   if (process.env["NODE_ENV"] === "production") {
-    console.warn("[auth] DEV_BYPASS_AUTH ignored in production.");
-    return false;
+    console.warn("[auth] DEV_BYPASS_AUTH enabled in production – demo mode, data is public.");
   }
   return true;
 }

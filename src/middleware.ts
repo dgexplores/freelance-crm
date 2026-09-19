@@ -7,11 +7,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * so a forged cookie gets pages that fail their data loads, not data.
  */
 export function middleware(request: NextRequest) {
-  // Dev mode: skip sign-in gate outside production (see src/lib/session.ts).
-  if (
-    process.env["DEV_BYPASS_AUTH"] === "true" &&
-    process.env["NODE_ENV"] !== "production"
-  ) {
+  // Demo mode: skip sign-in gate when explicitly enabled (see src/lib/session.ts).
+  if (process.env["DEV_BYPASS_AUTH"] === "true") {
     return NextResponse.next();
   }
   const hasSession = Boolean(getSessionCookie(request));
