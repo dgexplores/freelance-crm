@@ -198,9 +198,12 @@ function DraggableDealCard({
       {...listeners}
       {...attributes}
       style={{ ...style, animationDelay: `${Math.min(index * 40, 320)}ms` }}
-      className={`animate-fade-up ${isDragging ? "z-20 opacity-60" : ""}`}
+      className={`card-enter ${isDragging ? "z-20 opacity-60" : ""}`}
     >
-      <Link href={`/board/${deal.id}`} className="block touch-none">
+      <Link
+        href={`/board/${deal.id}`}
+        className="block touch-none rounded-lg transition-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      >
         <CardFace deal={deal} />
       </Link>
     </div>
@@ -228,9 +231,9 @@ function Column({
       <p className="mb-2 text-[11px] text-zinc-400">{STAGE_NOTES[stage]}</p>
       <div
         ref={setNodeRef}
-        className={`flex flex-1 flex-col gap-3 rounded-lg border p-2 transition-colors ${
+        className={`flex flex-1 flex-col gap-3 rounded-xl border p-2 transition-all duration-300 ${
           isOver
-            ? "border-zinc-900 bg-zinc-200/80"
+            ? "scale-[1.01] border-zinc-900 bg-zinc-200/80 shadow-[0_8px_28px_rgba(0,0,0,0.12)]"
             : "border-zinc-200 bg-zinc-100/60"
         }`}
       >
@@ -358,7 +361,7 @@ export function BoardClient(props: {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-7xl px-6 py-4">
+      <div className="mx-auto max-w-7xl px-6 pb-4 pt-20">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-lg font-semibold text-zinc-900">Pipeline</h1>

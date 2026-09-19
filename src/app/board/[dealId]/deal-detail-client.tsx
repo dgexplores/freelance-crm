@@ -212,8 +212,8 @@ export function DealDetailClient(props: {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white sticky top-0 z-10">
+    <div className="min-h-screen bg-zinc-50 pt-14">
+      <header className="border-b border-zinc-200 bg-white sticky top-14 z-10">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/board" className="text-zinc-500 hover:text-zinc-700">

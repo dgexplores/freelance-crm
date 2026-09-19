@@ -60,7 +60,7 @@ export function SettingsClient(props: {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
+    <div className="max-w-3xl mx-auto px-6 py-8 pt-20">
       <section className="mb-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
           Rate Card

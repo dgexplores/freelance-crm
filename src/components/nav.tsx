@@ -12,37 +12,31 @@ export function Nav() {
   ];
 
   return (
-    <nav className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="flex h-12 items-center justify-between">
-          <Link href="/board" className="text-lg font-semibold text-zinc-900">
-            Inbox CRM
-          </Link>
-          <div className="flex items-center gap-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  pathname === item.href || (item.href !== "/board" && pathname.startsWith(item.href))
-                    ? "bg-zinc-900 text-white"
-                    : "text-zinc-600 hover:bg-zinc-100"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-        <div className="flex h-7 items-center justify-end gap-4 border-t border-zinc-100">
-          <Link href="/privacy" className="text-[11px] text-zinc-400 hover:text-zinc-600">
-            Privacy
-          </Link>
-          <Link href="/terms" className="text-[11px] text-zinc-400 hover:text-zinc-600">
-            Terms
-          </Link>
-        </div>
-      </div>
-    </nav>
+    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+      <nav className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/40 bg-white/70 py-1.5 pl-5 pr-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+        <Link href="/board" className="font-display text-base font-bold tracking-tight text-zinc-950">
+          Inbox&nbsp;CRM
+        </Link>
+        <span className="mx-2 h-4 w-px bg-zinc-300" aria-hidden="true" />
+        {navItems.map((item) => {
+          const active =
+            pathname === item.href ||
+            (item.href !== "/board" && pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-300 ${
+                active
+                  ? "bg-zinc-950 text-white shadow"
+                  : "text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
