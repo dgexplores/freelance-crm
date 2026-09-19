@@ -300,15 +300,28 @@ Two harness problems were found and fixed while doing this, both worth recording
 
 ## What's left
 
-**Unchanged from the previous pass:**
+**Still open:**
 
 - `npm run predeploy` has still never run — `typecheck`, `lint`, `test`, `build`, the DB drift
   check and the RLS check. `npm ci` remains blocked in this sandbox.
 - The unit tests ran through a shim, not vitest. Pass/fail is real; vitest's own configuration,
   coverage reporting and watch mode are not exercised. Run `npm test` once dependencies install
   to confirm.
-- The PR is not open. The branch is pushed; `gh` is not installed, so open it at
-  `https://github.com/dgexplores/freelance-crm/pull/new/fix/review-p0-hardening`.
+- **CI cannot run either, so the gap above is not covered by the pipeline.** Both jobs
+  (`Lint & Typecheck`, `Tests`) fail in ~4 seconds with `runner_name` empty and zero steps
+  executed. GitHub's annotation names the cause: *"The job was not started because recent account
+  payments have failed or your spending limit needs to be increased."* A green run on `main`
+  takes ~2m24s by comparison, so the pipeline is not executing any code. **Fix the billing /
+  spending limit in GitHub settings, then re-run the workflow — nothing in the branch needs to
+  change for CI to start.** Until then, a red check on this repo says nothing about the code;
+  check `runner_name` before reading a failure as a verdict.
+
+**Resolved since the previous pass:**
+
+- ~~The PR is not open.~~ **PR #2 is open** against `main`:
+  https://github.com/dgexplores/freelance-crm/pull/2 (`gh` was available after all — it is
+  installed at `/opt/homebrew/bin/gh`; the shell's `PATH` simply omits Homebrew, so it must be
+  called by absolute path).
 
 **Optional, not done:**
 
