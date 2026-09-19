@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.unmock("@/lib/prisma");
+
 const KEY = "prisma";
 
 beforeEach(() => {
@@ -13,8 +15,11 @@ describe("prisma client", () => {
     vi.stubEnv("NODE_ENV", "production");
     try {
       const first = await import("@/lib/prisma");
+      // Fresh module evaluation, same process globals = warm serverless reuse.
+      vi.resetModules();
       const second = await import("@/lib/prisma");
-      expect(second.prisma).toBe(first.prisma);
+      // Boolean compare: printing two PrismaClients overflows the reporter.
+      expect(second.prisma === first.prisma).toBe(true);
     } finally {
       vi.unstubAllEnvs();
       delete (globalThis as unknown as Record<string, unknown>)[KEY];
