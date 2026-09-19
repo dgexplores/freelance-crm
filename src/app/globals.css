@@ -28,6 +28,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* --- AI generation states --------------------------------------------- */
@@ -48,7 +52,6 @@ body {
   50%      { opacity: 0; }
 }
 
-/* Blinking caret while a response is still streaming in. */
 .ai-caret::after {
   content: "▍";
   margin-left: 2px;
@@ -78,21 +81,178 @@ body {
   }
 }
 
-/* --- Landing ---------------------------------------------------------- */
+/* --- Apple Design: Typography ----------------------------------------- */
 
 .font-display {
   font-family: "Satoshi", var(--font-outfit), var(--font-geist-sans), sans-serif;
   letter-spacing: -0.02em;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01", "tnum";
 }
+
+.text-display-sm {
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.text-display-md {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.text-display-lg {
+  font-size: clamp(3rem, 6vw, 5rem);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+.text-body {
+  font-size: 1rem;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.text-body-sm {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+}
+
+.text-caption {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+/* --- Apple Design: Materials ------------------------------------------ */
+
+.material-regular {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.material-thick {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.material-heavy {
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(60px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.material-light {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .material-regular,
+  .material-thick,
+  .material-heavy,
+  .material-light {
+    backdrop-filter: none;
+    background: rgba(9, 9, 11, 0.95);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* --- Apple Design: Interactive States --------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 3px;
+}
+
+.button-primary {
+  @apply rounded-full bg-white px-7 py-3 text-sm font-semibold text-zinc-950 shadow-[0_8px_40px_rgba(255,255,255,0.15)];
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.1s ease-out;
+}
+
+.button-primary:hover {
+  background-color: rgba(255, 255, 255, 0.92);
+  transform: scale(1.02);
+  box-shadow: 0 12px 48px rgba(255, 255, 255, 0.2);
+}
+
+.button-primary:active {
+  transform: scale(0.96);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+}
+
+.button-secondary {
+  @apply rounded-full border border-white/20 bg-white/10 px-7 py-3 text-sm font-semibold text-white backdrop-blur-sm;
+  transition: transform 0.15s ease-out, background-color 0.1s ease-out, border-color 0.1s ease-out;
+}
+
+.button-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.02);
+}
+
+.button-secondary:active {
+  transform: scale(0.96);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.button-cta {
+  @apply rounded-full bg-lime px-7 py-3 text-sm font-semibold text-ink shadow-[0_8px_40px_rgba(217,245,76,0.3)];
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.1s ease-out;
+}
+
+.button-cta:hover {
+  background-color: #ccf042;
+  transform: scale(1.02);
+  box-shadow: 0 12px 48px rgba(217, 245, 76, 0.4);
+}
+
+.button-cta:active {
+  transform: scale(0.96);
+  box-shadow: 0 4px 20px rgba(217, 245, 76, 0.3);
+}
+
+.button-ghost {
+  @apply rounded-full px-7 py-3 text-sm font-semibold text-white;
+  transition: transform 0.15s ease-out, background-color 0.1s ease-out;
+}
+
+.button-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: scale(1.02);
+}
+
+.button-ghost:active {
+  transform: scale(0.96);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* --- Apple Design: Grain Texture -------------------------------------- */
 
 .grain::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .grain::before {
+    opacity: 0.02;
+  }
+}
+
+/* --- Apple Design: Marquee -------------------------------------------- */
 
 @keyframes marquee-x {
   from { transform: translateX(0); }
@@ -100,14 +260,22 @@ body {
 }
 
 .marquee-track {
-  animation: marquee-x 28s linear infinite;
+  animation: marquee-x 30s linear infinite;
 }
 
 .marquee-mask {
-  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
 }
 
-/* Board entrance + card physics */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* --- Apple Design: Board/Card Physics --------------------------------- */
+
 @keyframes card-enter {
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
   to   { opacity: 1; transform: none; }
@@ -124,4 +292,75 @@ body {
 .flow-dash {
   stroke-dasharray: 6 6;
   animation: dash-flow 1.2s linear infinite;
+}
+
+/* --- Apple Design: Scrollbar ------------------------------------------ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* --- Apple Design: Selection ------------------------------------------ */
+
+::selection {
+  background: rgba(217, 245, 76, 0.3);
+  color: inherit;
+}
+
+/* --- Apple Design: Reduced Motion ------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- Apple Design: High Contrast -------------------------------------- */
+
+@media (prefers-contrast: more) {
+  .material-regular,
+  .material-thick,
+  .material-heavy,
+  .material-light {
+    background: #09090b;
+    border-color: #3f3f46;
+    backdrop-filter: none;
+  }
+  .button-primary {
+    border: 2px solid white;
+  }
+  .button-secondary {
+    border-color: white;
+  }
+  .button-cta {
+    border: 2px solid #131316;
+  }
 }

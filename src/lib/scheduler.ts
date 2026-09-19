@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { listStaleDeals, generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 import { checkAiQuota, recordAiUsage } from "@/lib/billing";
+import { getUserPrefs } from "@/lib/prefs";
 import { logger } from "@/lib/logger";
 
 export type SchedulerResult = {
@@ -86,16 +87,9 @@ export async function scheduleFollowUpsAllUsers(): Promise<AllUsersSchedulerResu
 
   for (const { userId } of rows) {
     try {
-      const prefs = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { staleDays: true, autoFollowUp: true },
-      });
-      if (prefs && !prefs.autoFollowUp) continue;
-      const days =
-        prefs && Number.isInteger(prefs.staleDays) && prefs.staleDays >= 1 && prefs.staleDays <= 30
-          ? prefs.staleDays
-          : DEFAULT_STALE_DAYS;
-      const result = await scheduleFollowUpsForUser(userId, days);
+      const prefs = await getUserPrefs(userId);
+      if (!prefs.autoFollowUp) continue;
+      const result = await scheduleFollowUpsForUser(userId, prefs.staleDays);
       scheduled += result.scheduled;
       errors.push(...result.errors.map((e) => `[user ${userId}] ${e}`));
     } catch (err) {

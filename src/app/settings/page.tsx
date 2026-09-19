@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
 import { billingEnabled, getUsage } from "@/lib/billing";
+import { getUserPrefs } from "@/lib/prefs";
 import { SettingsClient } from "./settings-client";
 
 export const metadata = { title: "Settings | Inbox CRM" };
@@ -19,11 +20,10 @@ export default async function SettingsPage() {
       name: true,
       rateCard: true,
       gmailSyncStartedAt: true,
-      staleDays: true,
-      autoFollowUp: true,
     },
   });
   const usage = await getUsage(user.id);
+  const prefs = await getUserPrefs(user.id);
   const gmailConnected = await prisma.account.count({
     where: { userId: user.id, providerId: "google" },
   });
@@ -34,8 +34,8 @@ export default async function SettingsPage() {
       userName={userData?.name ?? ""}
       rateCard={userData?.rateCard ?? ""}
       gmailSyncStartedAt={userData?.gmailSyncStartedAt?.toISOString() ?? null}
-      staleDays={userData?.staleDays ?? 5}
-      autoFollowUp={userData?.autoFollowUp ?? true}
+      staleDays={prefs.staleDays}
+      autoFollowUp={prefs.autoFollowUp}
       gmailConnected={gmailConnected > 0}
       billing={{ ...usage, enabled: billingEnabled() }}
     />

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PinWrap, RiseIn, ScaleMedia, ScrubWords } from "@/components/landing/motion";
+import { RiseIn, ScrubWords, ScaleMedia } from "@/components/landing/motion";
 import { HowAccordion } from "@/components/landing/accordion";
 import { Testimonials } from "@/components/landing/testimonials";
+import { Button } from "@/components/ui/button";
 
 export const metadata = {
   title: "Inbox CRM — your inbox is your pipeline",
@@ -39,12 +40,12 @@ export default function Home() {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 55% 40% at 20% 15%, rgba(52,211,153,0.14) 0%, transparent 70%), radial-gradient(ellipse 50% 38% at 85% 80%, rgba(139,92,246,0.16) 0%, transparent 70%), #09090b",
+              "radial-gradient(ellipse 60% 45% at 15% 10%, rgba(52,211,153,0.18) 0%, transparent 70%), radial-gradient(ellipse 55% 40% at 85% 85%, rgba(139,92,246,0.18) 0%, transparent 70%), #09090b",
           }}
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-cover bg-center opacity-60 grayscale contrast-125"
+          className="absolute inset-0 bg-cover bg-center opacity-40 grayscale contrast-125"
           style={{ backgroundImage: "url(https://picsum.photos/seed/inbox-desk/1920/1080)" }}
         />
         <div
@@ -52,47 +53,46 @@ export default function Home() {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 90% 65% at 50% 42%, rgba(9,9,11,0.25) 0%, rgba(9,9,11,0.78) 62%, #09090b 100%)",
+              "radial-gradient(ellipse 100% 70% at 50% 40%, rgba(9,9,11,0.15) 0%, rgba(9,9,11,0.65) 55%, #09090b 100%)",
           }}
         />
         <div className="relative flex w-full flex-col items-center">
           <RiseIn>
-            <p className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-medium tracking-wide text-zinc-200 backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium tracking-wide text-zinc-200 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Read-only Gmail · never sends, moves, or deletes
-            </p>
+            </span>
           </RiseIn>
-          <h1 className="font-display w-full max-w-6xl text-balance text-[clamp(2.75rem,5vw,5rem)] font-bold leading-[1.04] tracking-tight">
+          <h1 className="font-display w-full max-w-6xl text-balance text-[clamp(2.75rem,5vw,5rem)] font-bold leading-[1.02] tracking-tight">
             Your inbox already wrote your pipeline. We just lay it out.
           </h1>
-          <RiseIn delay={0.15}>
+          <RiseIn delay={0.12}>
             <p className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-zinc-300">
               Every inbound email becomes a contact and a deal — staged, evidenced,
               and ready to act on. No data entry. No guessing.
             </p>
           </RiseIn>
-          <RiseIn delay={0.25}>
+          <RiseIn delay={0.2}>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-              <Link
-                href="/board"
-                className="rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_8px_40px_rgba(255,255,255,0.25)] transition-transform duration-300 hover:scale-105"
-              >
-                Open the board
+              <Link href="/board">
+                <Button variant="cta" asChild>
+                  Open the board
+                </Button>
               </Link>
-              <Link
-                href="/sign-in"
-                className="rounded-full border border-white/30 px-8 py-3.5 text-sm font-semibold text-white backdrop-blur transition-colors duration-300 hover:bg-white hover:text-zinc-950"
-              >
-                Connect Gmail
+              <Link href="/sign-in">
+                <Button variant="secondary" asChild>
+                  Connect Gmail
+                </Button>
               </Link>
             </div>
           </RiseIn>
         </div>
       </section>
 
-      {/* Marquee */}
-      <div className="marquee-mask overflow-hidden border-y border-white/10 bg-zinc-950 py-5">
-        <div className="marquee-track flex w-max items-center gap-10 pr-10">
+      {/* Marquee — translucent material */}
+      <div className="relative overflow-hidden border-y border-white/10 bg-zinc-950/80 py-5 backdrop-blur-xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent" />
+        <div className="relative marquee-track flex w-max items-center gap-10 pr-10">
           {[...MARQUEE, ...MARQUEE].map((m, i) => (
             <span key={i} aria-hidden={i >= MARQUEE.length} className="flex items-center gap-10 whitespace-nowrap">
               <span className="font-display text-lg font-semibold tracking-tight text-zinc-100">{m}</span>
@@ -102,7 +102,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* INTEREST — gapless bento */}
+      {/* INTEREST — gapless bento with material depth */}
       <section className="mx-auto w-full max-w-7xl px-6 py-32 md:py-48">
         <RiseIn>
           <h2 className="font-display max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
@@ -111,7 +111,7 @@ export default function Home() {
         </RiseIn>
         <div className="mt-14 grid grid-cols-1 gap-4 md:grid-cols-6 md:[grid-auto-flow:dense]">
           <RiseIn className="md:col-span-4">
-            <article className="group h-full overflow-hidden rounded-3xl border border-white/10 bg-zinc-900">
+            <article className="group h-full overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/60 backdrop-blur-xl">
               <div className="overflow-hidden">
                 <div
                   className="h-64 bg-cover bg-center grayscale contrast-125 opacity-90 transition-transform duration-700 ease-out group-hover:scale-105 md:h-80"
@@ -127,8 +127,8 @@ export default function Home() {
               </div>
             </article>
           </RiseIn>
-          <RiseIn delay={0.1} className="md:col-span-2">
-            <article className="group flex h-full flex-col justify-between overflow-hidden rounded-3xl bg-white p-8 text-zinc-950">
+          <RiseIn delay={0.08} className="md:col-span-2">
+            <article className="group flex h-full flex-col justify-between overflow-hidden rounded-3xl bg-white/95 p-8 text-zinc-950 backdrop-blur-xl">
               <div
                 className="h-40 rounded-2xl bg-cover bg-center grayscale contrast-125 transition-transform duration-700 ease-out group-hover:scale-105"
                 style={{ backgroundImage: "url(https://picsum.photos/seed/evidence-note/600/400)" }}
@@ -142,7 +142,7 @@ export default function Home() {
             </article>
           </RiseIn>
           <RiseIn className="md:col-span-2">
-            <article className="group flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-zinc-900 p-8">
+            <article className="group flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/60 p-8 backdrop-blur-xl">
               <div
                 className="h-40 rounded-2xl bg-cover bg-center opacity-90 grayscale contrast-125 transition-transform duration-700 ease-out group-hover:scale-105"
                 style={{ backgroundImage: "url(https://picsum.photos/seed/rate-card/600/400)" }}
@@ -155,17 +155,17 @@ export default function Home() {
               </div>
             </article>
           </RiseIn>
-          <RiseIn delay={0.1} className="md:col-span-4">
-            <article className="group grid h-full overflow-hidden rounded-3xl bg-emerald-300 text-zinc-950 sm:grid-cols-2">
+          <RiseIn delay={0.08} className="md:col-span-4">
+            <article className="group grid h-full overflow-hidden rounded-3xl bg-emerald-400/90 text-zinc-950 sm:grid-cols-2 backdrop-blur-xl">
               <div className="p-8">
                 <h3 className="font-display text-2xl font-bold tracking-tight">Briefs, nudges, follow-ups</h3>
                 <p className="mt-3 leading-7 text-zinc-800">
                   Pre-call briefs before you dial. Human re-engagement drafts when deals go
                   quiet. Streams in live, copies in one click.
                 </p>
-                <span className="mt-6 inline-block rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition-transform duration-300 group-hover:scale-105">
-                  See it on the board
-                </span>
+                <Button variant="ghost" className="mt-6" asChild>
+                  <Link href="/board">See it on the board</Link>
+                </Button>
               </div>
               <div
                 className="min-h-56 bg-cover bg-center grayscale contrast-125 transition-transform duration-700 ease-out group-hover:scale-105"
@@ -191,7 +191,7 @@ export default function Home() {
             Hover the work. <InlineImg seed="hover-slices" label="workflow slices" /> Feel each step.
           </h2>
         </RiseIn>
-        <RiseIn delay={0.1}>
+        <RiseIn delay={0.08}>
           <div className="mt-14">
             <HowAccordion />
           </div>
@@ -200,21 +200,26 @@ export default function Home() {
 
       {/* DESIRE — pinned title + scrolling gallery */}
       <section className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-10 px-6 pb-32 md:grid-cols-[1fr_1.4fr] md:pb-48">
-        <PinWrap distance={520} className="md:self-start">
-          <h2 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
-            Built for the <InlineImg seed="solo-desk" label="solo freelancer" /> solo seller.
-          </h2>
-          <p className="mt-6 max-w-md leading-7 text-zinc-400">
-            Not a sales team dashboard. A quiet loop that turns threads into revenue
-            while you do the work.
-          </p>
-          <Link
-            href="/board"
-            className="mt-8 inline-block rounded-full bg-white px-7 py-3 text-sm font-semibold text-zinc-950 transition-transform duration-300 hover:scale-105"
-          >
-            Try the live board
-          </Link>
-        </PinWrap>
+        <div className="md:self-start">
+          <RiseIn>
+            <h2 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
+              Built for the <InlineImg seed="solo-desk" label="solo freelancer" /> solo seller.
+            </h2>
+          </RiseIn>
+          <RiseIn delay={0.08}>
+            <p className="mt-6 max-w-md leading-7 text-zinc-400">
+              Not a sales team dashboard. A quiet loop that turns threads into revenue
+              while you do the work.
+            </p>
+          </RiseIn>
+          <RiseIn delay={0.16}>
+            <Link href="/board">
+              <Button variant="cta" className="mt-8" asChild>
+                Try the live board
+              </Button>
+            </Link>
+          </RiseIn>
+        </div>
         <div className="flex flex-col gap-6">
           {[
             { seed: "gallery-inbox", title: "Import", body: "Forward-only Gmail sync. Nothing touched, everything captured." },
@@ -238,7 +243,7 @@ export default function Home() {
       </section>
 
       {/* Testimonials */}
-      <section className="border-y border-white/10 bg-zinc-900/40 py-32 md:py-40">
+      <section className="relative border-y border-white/10 bg-zinc-950/60 py-32 md:py-40 backdrop-blur-xl">
         <Testimonials />
       </section>
 
@@ -251,41 +256,39 @@ export default function Home() {
         </RiseIn>
         <div className="mt-14 grid gap-4 md:grid-cols-2">
           <RiseIn>
-            <article className="flex h-full flex-col rounded-3xl border border-white/10 bg-zinc-900 p-8">
+            <article className="flex h-full flex-col rounded-3xl border border-white/10 bg-zinc-900/60 p-8 backdrop-blur-xl">
               <p className="font-display text-xl font-bold">Free</p>
               <p className="mt-1 text-sm text-zinc-400">Taste the loop.</p>
               <p className="font-display mt-6 text-5xl font-bold">$0</p>
               <ul className="mt-6 space-y-3 text-sm leading-6 text-zinc-300">
-                <li>Unlimited deals, contacts, tasks</li>
-                <li>20 AI generations / month</li>
-                <li>Gmail read-only import</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Unlimited deals, contacts, tasks</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />20 AI generations / month</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Gmail read-only import</li>
               </ul>
-              <Link
-                href="/board"
-                className="mt-8 rounded-full border border-white/25 px-7 py-3 text-center text-sm font-semibold text-white transition-colors duration-300 hover:bg-white hover:text-zinc-950"
-              >
-                Start free
+              <Link href="/board">
+                <Button variant="secondary" className="mt-8 w-full" asChild>
+                  Start free
+                </Button>
               </Link>
             </article>
           </RiseIn>
-          <RiseIn delay={0.1}>
-            <article className="group relative flex h-full flex-col overflow-hidden rounded-3xl bg-lime p-8 text-ink">
-              <span className="absolute right-6 top-6 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-lime">
+          <RiseIn delay={0.08}>
+            <article className="group relative flex h-full flex-col overflow-hidden rounded-3xl bg-lime/95 p-8 text-zinc-950 backdrop-blur-xl">
+              <span className="absolute right-6 top-6 rounded-full bg-zinc-950 px-3 py-1 text-xs font-semibold text-lime">
                 Solo Pro
               </span>
               <p className="font-display text-xl font-bold">Pro</p>
-              <p className="mt-1 text-sm text-ink/60">For sellers who live in their inbox.</p>
+              <p className="mt-1 text-sm text-zinc-600">For sellers who live in their inbox.</p>
               <p className="font-display mt-6 text-5xl font-bold">$19<span className="text-xl">/mo</span></p>
-              <ul className="mt-6 space-y-3 text-sm leading-6 text-ink/80">
-                <li>Everything in Free</li>
-                <li>500 AI generations / month</li>
-                <li>Priority import + new features first</li>
+              <ul className="mt-6 space-y-3 text-sm leading-6 text-zinc-700">
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-zinc-950" />Everything in Free</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-zinc-950" />500 AI generations / month</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-zinc-950" />Priority import + new features first</li>
               </ul>
-              <Link
-                href="/settings"
-                className="mt-8 rounded-full bg-ink px-7 py-3 text-center text-sm font-semibold text-white transition-transform duration-300 group-hover:scale-[1.02]"
-              >
-                Upgrade in Settings
+              <Link href="/settings">
+                <Button variant="primary" className="mt-8 w-full" asChild>
+                  Upgrade in Settings
+                </Button>
               </Link>
             </article>
           </RiseIn>
@@ -296,7 +299,7 @@ export default function Home() {
       <section className="grain relative overflow-hidden px-6 pb-16 pt-32 md:pt-48">
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-cover bg-center opacity-30 grayscale contrast-125"
+          className="absolute inset-0 bg-cover bg-center opacity-25 grayscale contrast-125"
           style={{ backgroundImage: "url(https://picsum.photos/seed/closing-deal/1920/800)" }}
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-zinc-950/70 to-zinc-950" />
@@ -307,32 +310,30 @@ export default function Home() {
                 Stop copying emails into spreadsheets.
               </h2>
             </RiseIn>
-            <RiseIn delay={0.15}>
+            <RiseIn delay={0.12}>
               <div className="mt-10 flex flex-wrap items-center gap-4">
-                <Link
-                  href="/board"
-                  className="rounded-full bg-lime px-10 py-4 text-sm font-semibold text-ink shadow-[0_8px_40px_rgba(217,245,76,0.3)] transition-transform duration-300 hover:scale-105"
-                >
-                  Open the board
+                <Link href="/board">
+                  <Button variant="cta" className="px-10 py-4" asChild>
+                    Open the board
+                  </Button>
                 </Link>
-                <Link
-                  href="/sign-in"
-                  className="rounded-full border border-white/30 px-10 py-4 text-sm font-semibold text-white transition-colors duration-300 hover:bg-white hover:text-zinc-950"
-                >
-                  Connect Gmail
+                <Link href="/sign-in">
+                  <Button variant="secondary" className="px-10 py-4" asChild>
+                    Connect Gmail
+                  </Button>
                 </Link>
               </div>
             </RiseIn>
           </div>
-          <RiseIn delay={0.2} className="hidden justify-self-end md:block">
+          <RiseIn delay={0.16} className="hidden justify-self-end md:block">
             <figure className="w-72 rotate-3 overflow-hidden rounded-3xl border border-white/20 shadow-[0_24px_80px_rgba(0,0,0,0.5)] transition-transform duration-700 hover:rotate-0">
               <div
                 className="h-80 bg-cover bg-center grayscale contrast-125"
                 style={{ backgroundImage: "url(https://picsum.photos/seed/won-card/600/800)" }}
               />
-              <figcaption className="bg-lime px-5 py-4 text-left">
-                <p className="font-display text-lg font-bold text-ink">Deal won</p>
-                <p className="text-sm text-ink/70">Proposal accepted · Monday start</p>
+              <figcaption className="bg-lime/95 px-5 py-4 text-left backdrop-blur-xl">
+                <p className="font-display text-lg font-bold text-zinc-950">Deal won</p>
+                <p className="text-sm text-zinc-700">Proposal accepted · Monday start</p>
               </figcaption>
             </figure>
           </RiseIn>

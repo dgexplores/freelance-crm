@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
 
@@ -72,6 +73,9 @@ export async function updatePreferencesAction(
     revalidatePath("/board");
     return { ok: true, message: "Preferences saved." };
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2022") {
+      return { ok: false, message: "Preferences unavailable until the database is migrated (`npm run db:push`)." };
+    }
     return { ok: false, message: err instanceof Error ? err.message : "Failed to save preferences." };
   }
 }

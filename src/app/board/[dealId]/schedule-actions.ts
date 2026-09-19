@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getUser } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
+import { getUserPrefs } from "@/lib/prefs";
 import { scheduleFollowUpsForUser, type SchedulerResult } from "@/lib/scheduler";
-import { DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 
 export type { SchedulerResult };
 
@@ -24,11 +23,7 @@ export async function scheduleStaleFollowUpsAction(
   try {
     let floored: number;
     if (days === undefined) {
-      const prefs = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { staleDays: true },
-      });
-      floored = prefs?.staleDays ?? DEFAULT_STALE_DAYS;
+      floored = (await getUserPrefs(user.id)).staleDays;
     } else {
       floored = Math.floor(days);
     }
