@@ -2,6 +2,7 @@ import { streamDealBrief } from "@/lib/ai/brief";
 import { aiErrorResponse, readDealId } from "@/lib/ai/http";
 import { getUser } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
+import { checkAiQuota, recordAiUsage } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,12 @@ export async function POST(request: Request) {
 
   try {
     rateLimit(`ai:brief:${user.id}`, RATE_LIMIT);
+    await checkAiQuota(user.id);
     const dealId = await readDealId(request);
     // All validation errors throw before any bytes reach the client, so
     // they map to normal JSON responses via aiErrorResponse.
     const stream = await streamDealBrief(user.id, dealId);
+    await recordAiUsage(user.id);
     // Pre-stream errors map to JSON via aiErrorResponse above; once headers
     // are sent, mid-stream failures propagate as an aborted body.
     return new Response(stream, {

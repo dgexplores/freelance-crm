@@ -2,6 +2,7 @@ import { streamProposalDraft } from "@/lib/ai/proposal";
 import { aiErrorResponse, readDealId } from "@/lib/ai/http";
 import { getUser } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
+import { checkAiQuota, recordAiUsage } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,10 @@ export async function POST(request: Request) {
 
   try {
     rateLimit(`ai:proposal:${user.id}`, RATE_LIMIT);
+    await checkAiQuota(user.id);
     const dealId = await readDealId(request);
     const stream = await streamProposalDraft(user.id, dealId);
+    await recordAiUsage(user.id);
     // Pre-stream errors map to JSON via aiErrorResponse; mid-stream failures
     // propagate as an aborted body once headers are sent.
     return new Response(stream, {

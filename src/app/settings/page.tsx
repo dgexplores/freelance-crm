@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
+import { billingEnabled, getUsage } from "@/lib/billing";
 import { SettingsClient } from "./settings-client";
 
 export const metadata = { title: "Settings | Inbox CRM" };
@@ -17,6 +18,7 @@ export default async function SettingsPage() {
       gmailSyncStartedAt: true,
     },
   });
+  const usage = await getUsage(user.id);
 
   return (
     <SettingsClient
@@ -24,6 +26,7 @@ export default async function SettingsPage() {
       userName={userData?.name ?? ""}
       rateCard={userData?.rateCard ?? ""}
       gmailSyncStartedAt={userData?.gmailSyncStartedAt?.toISOString() ?? null}
+      billing={{ ...usage, enabled: billingEnabled() }}
     />
   );
 }

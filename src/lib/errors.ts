@@ -7,6 +7,7 @@ export type AppErrorCode =
   | "not_found"
   | "conflict"
   | "rate_limited"
+  | "quota_exceeded"
   | "unavailable"
   | "upstream"
   | "internal";

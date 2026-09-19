@@ -242,6 +242,56 @@ export default function Home() {
         <Testimonials />
       </section>
 
+      {/* Pricing */}
+      <section className="mx-auto w-full max-w-7xl px-6 py-32 md:py-48">
+        <RiseIn>
+          <h2 className="font-display max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
+            One seat. One price. <InlineImg seed="solo-price" label="single plan" /> No tiers to decode.
+          </h2>
+        </RiseIn>
+        <div className="mt-14 grid gap-4 md:grid-cols-2">
+          <RiseIn>
+            <article className="flex h-full flex-col rounded-3xl border border-white/10 bg-zinc-900 p-8">
+              <p className="font-display text-xl font-bold">Free</p>
+              <p className="mt-1 text-sm text-zinc-400">Taste the loop.</p>
+              <p className="font-display mt-6 text-5xl font-bold">$0</p>
+              <ul className="mt-6 space-y-3 text-sm leading-6 text-zinc-300">
+                <li>Unlimited deals, contacts, tasks</li>
+                <li>20 AI generations / month</li>
+                <li>Gmail read-only import</li>
+              </ul>
+              <Link
+                href="/board"
+                className="mt-8 rounded-full border border-white/25 px-7 py-3 text-center text-sm font-semibold text-white transition-colors duration-300 hover:bg-white hover:text-zinc-950"
+              >
+                Start free
+              </Link>
+            </article>
+          </RiseIn>
+          <RiseIn delay={0.1}>
+            <article className="group relative flex h-full flex-col overflow-hidden rounded-3xl bg-lime p-8 text-ink">
+              <span className="absolute right-6 top-6 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-lime">
+                Solo Pro
+              </span>
+              <p className="font-display text-xl font-bold">Pro</p>
+              <p className="mt-1 text-sm text-ink/60">For sellers who live in their inbox.</p>
+              <p className="font-display mt-6 text-5xl font-bold">$19<span className="text-xl">/mo</span></p>
+              <ul className="mt-6 space-y-3 text-sm leading-6 text-ink/80">
+                <li>Everything in Free</li>
+                <li>500 AI generations / month</li>
+                <li>Priority import + new features first</li>
+              </ul>
+              <Link
+                href="/settings"
+                className="mt-8 rounded-full bg-ink px-7 py-3 text-center text-sm font-semibold text-white transition-transform duration-300 group-hover:scale-[1.02]"
+              >
+                Upgrade in Settings
+              </Link>
+            </article>
+          </RiseIn>
+        </div>
+      </section>
+
       {/* ACTION — asymmetric CTA + footer */}
       <section className="grain relative overflow-hidden px-6 pb-16 pt-32 md:pt-48">
         <div

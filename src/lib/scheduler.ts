@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { listStaleDeals, generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
+import { checkAiQuota, recordAiUsage } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 
 export type SchedulerResult = {
@@ -35,7 +36,9 @@ export async function scheduleFollowUpsForUser(
     if (existing) continue;
 
     try {
+      await checkAiQuota(userId);
       const nudge = await generateFollowUpNudge(userId, stale.dealId, days);
+      await recordAiUsage(userId);
       try {
         await prisma.task.create({
           data: {

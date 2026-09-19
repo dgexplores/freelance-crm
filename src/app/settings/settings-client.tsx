@@ -34,11 +34,14 @@ export function SettingsClient(props: {
   userName: string;
   rateCard: string;
   gmailSyncStartedAt: string | null;
+  billing: { used: number; limit: number; status: string; pro: boolean; enabled: boolean };
 }) {
   const [rateCard, setRateCard] = useState(props.rateCard || DEFAULT_RATE_CARD);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
   async function handleSave() {
     setSaving(true);
@@ -59,10 +62,83 @@ export function SettingsClient(props: {
     }
   }
 
+  async function handleBilling(path: "/api/billing/checkout" | "/api/billing/portal") {
+    setBillingBusy(true);
+    setBillingError(null);
+    try {
+      const res = await fetch(path, { method: "POST" });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setBillingError(data.error ?? "Billing request failed.");
+      }
+    } catch (e) {
+      setBillingError(e instanceof Error ? e.message : "Billing request failed.");
+    } finally {
+      setBillingBusy(false);
+    }
+  }
+
+  const usagePct = Math.min(100, Math.round((props.billing.used / Math.max(1, props.billing.limit)) * 100));
+
   return (
     <div className="min-h-screen bg-paper">
       <div className="max-w-3xl mx-auto px-6 py-8 pt-24">
       <h1 className="font-display mb-8 text-3xl font-bold tracking-tight text-ink">Settings</h1>
+
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.05)]">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-bold text-ink">Plan</h2>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              props.billing.pro ? "bg-lime text-ink" : "bg-zinc-100 text-zinc-600"
+            }`}
+          >
+            {props.billing.pro ? "Pro" : "Free"}
+          </span>
+        </div>
+        <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
+          <span>AI generations this period</span>
+          <span className="font-mono">
+            {props.billing.used} / {props.billing.limit}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+          <div
+            className={`h-full rounded-full transition-all ${props.billing.pro ? "bg-lime" : "bg-ink"}`}
+            style={{ width: `${usagePct}%` }}
+          />
+        </div>
+        {billingError && (
+          <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">{billingError}</p>
+        )}
+        <div className="mt-4 flex items-center gap-3">
+          {props.billing.enabled ? (
+            props.billing.pro ? (
+              <button
+                onClick={() => handleBilling("/api/billing/portal")}
+                disabled={billingBusy}
+                className="rounded-full border border-zinc-300 px-5 py-2 text-sm font-semibold text-ink transition hover:bg-zinc-100 disabled:opacity-40"
+              >
+                {billingBusy ? "Opening…" : "Manage subscription"}
+              </button>
+            ) : (
+              <button
+                onClick={() => handleBilling("/api/billing/checkout")}
+                disabled={billingBusy}
+                className="rounded-full bg-ink px-5 py-2 text-sm font-semibold text-white transition-transform duration-300 hover:scale-105 disabled:opacity-40"
+              >
+                {billingBusy ? "Redirecting…" : "Upgrade to Pro"}
+              </button>
+            )
+          ) : (
+            <p className="text-xs text-zinc-400">
+              Billing not configured yet — free quota of {props.billing.limit} AI generations applies.
+            </p>
+          )}
+        </div>
+      </section>
       <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.05)]">
         <h2 className="font-display mb-3 text-lg font-bold text-ink">
           Rate Card

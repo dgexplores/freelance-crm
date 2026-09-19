@@ -62,6 +62,34 @@ function fmtDate(iso: string | null): string {
   });
 }
 
+function fmtMoney(n: number): string {
+  return n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `$${n}`;
+}
+
+/** Animated count-up (respects reduced motion). */
+function CountUp({ value, format = String }: { value: number; format?: (n: number) => string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // Intentional: skip animation, jump to final value.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDisplay(value);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const dur = 900;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / dur);
+      setDisplay(Math.round(value * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{format(display)}</>;
+}
+
 function MoveButtons({ deal }: { deal: DealCard }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -143,8 +171,19 @@ function MoveButtons({ deal }: { deal: DealCard }) {
 }
 
 function CardFace({ deal }: { deal: DealCard }) {
+  const initials = (deal.contact.name ?? deal.contact.email)
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+  const won = deal.stage === "WON";
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+    <div
+      className={`rounded-xl border bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+        won ? "border-lime/80" : "border-zinc-200"
+      }`}
+    >
       <div className="mb-1 flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-zinc-900">{deal.title}</h3>
         <span
@@ -153,10 +192,25 @@ function CardFace({ deal }: { deal: DealCard }) {
           {deal.stage}
         </span>
       </div>
-      <p className="text-xs text-zinc-600">
-        {deal.contact.name ? `${deal.contact.name} · ` : ""}
-        <span className="text-zinc-500">{deal.contact.email}</span>
-      </p>
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+            won ? "bg-lime text-ink" : "bg-ink text-white"
+          }`}
+        >
+          {initials}
+        </span>
+        <p className="truncate text-xs text-zinc-600">
+          {deal.contact.name ? `${deal.contact.name} · ` : ""}
+          <span className="text-zinc-500">{deal.contact.email}</span>
+        </p>
+        {deal.value != null && (
+          <span className="ml-auto shrink-0 rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-semibold text-white">
+            {fmtMoney(deal.value)}
+          </span>
+        )}
+      </div>
       <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-700">
         {deal.whyInPipeline ?? "No evidence recorded."}
       </p>
@@ -213,10 +267,12 @@ function DraggableDealCard({
 function Column({
   stage,
   count,
+  total,
   children,
 }: {
   stage: (typeof STAGES)[number];
   count: number;
+  total: number;
   children: ReactNode;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `col:${stage}` });
@@ -225,12 +281,17 @@ function Column({
     <section className="flex flex-col">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="font-display text-sm font-bold uppercase tracking-widest text-ink">{stage}</h2>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-            won ? "bg-lime text-ink" : "bg-zinc-200 text-zinc-600"
-          }`}
-        >
-          {count}
+        <span className="flex items-center gap-1.5">
+          {total > 0 && (
+            <span className="text-[11px] font-semibold text-zinc-500">{fmtMoney(total)}</span>
+          )}
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              won ? "bg-lime text-ink" : "bg-zinc-200 text-zinc-600"
+            }`}
+          >
+            {count}
+          </span>
         </span>
       </div>
       <p className="mb-2 text-[11px] text-zinc-400">{STAGE_NOTES[stage]}</p>
@@ -359,10 +420,18 @@ export function BoardClient(props: {
     router.replace("/");
   }
 
-  const columns = STAGES.map((stage) => ({
-    stage,
-    deals: deals.filter((d) => d.stage === stage),
-  }));
+  const columns = STAGES.map((stage) => {
+    const columnDeals = deals.filter((d) => d.stage === stage);
+    return {
+      stage,
+      deals: columnDeals,
+      total: columnDeals.reduce((sum, d) => sum + (d.value ?? 0), 0),
+    };
+  });
+  const pipelineValue = columns
+    .filter((c) => c.stage !== "LOST")
+    .reduce((sum, c) => sum + c.total, 0);
+  const wonValue = columns.find((c) => c.stage === "WON")?.total ?? 0;
 
   const activeDeal = activeId ? deals.find((d) => d.id === activeId) ?? null : null;
 
@@ -407,6 +476,50 @@ export function BoardClient(props: {
           {" · "}
           {props.factCount} facts recorded
         </p>
+
+        {/* Stats strip */}
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            { label: "Pipeline value", value: <CountUp value={pipelineValue} format={fmtMoney} />, hot: true },
+            { label: "Active deals", value: <CountUp value={deals.filter((d) => d.stage !== "WON" && d.stage !== "LOST").length} /> },
+            { label: "Won value", value: <CountUp value={wonValue} format={fmtMoney} /> },
+            { label: "Need follow-up", value: <CountUp value={props.staleCount} />, warn: props.staleCount > 0 },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className={`rounded-2xl border p-4 ${
+                s.hot
+                  ? "border-ink bg-ink text-white"
+                  : "border-zinc-200 bg-white text-ink"
+              }`}
+            >
+              <p className={`font-display text-2xl font-bold tracking-tight ${s.warn ? "text-ember" : ""}`}>
+                {s.value}
+              </p>
+              <p className={`mt-1 text-[11px] uppercase tracking-widest ${s.hot ? "text-zinc-400" : "text-zinc-500"}`}>
+                {s.label}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Flow strip */}
+        <div className="mb-6 hidden overflow-hidden rounded-2xl border border-zinc-200 bg-white px-6 py-4 md:block" aria-hidden="true">
+          <svg viewBox="0 0 600 28" className="w-full" preserveAspectRatio="none">
+            <line x1="8" y1="14" x2="592" y2="14" stroke="#d4d4d8" strokeWidth="2" />
+            <line x1="8" y1="14" x2="592" y2="14" stroke="#131316" strokeWidth="2" className="flow-dash" />
+            {STAGES.map((s, i) => (
+              <g key={s}>
+                <circle cx={20 + i * 140} cy="14" r="6" fill={s === "WON" ? "#d9f54c" : "#131316"} stroke="#fff" strokeWidth="2" />
+              </g>
+            ))}
+          </svg>
+          <div className="mt-1 flex justify-between text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+            {STAGES.map((s) => (
+              <span key={s} className="w-16 text-center first:text-left last:text-right">{s}</span>
+            ))}
+          </div>
+        </div>
       </div>
 
       <main className="mx-auto max-w-7xl px-6 pb-6">
@@ -418,8 +531,8 @@ export function BoardClient(props: {
           onDragCancel={() => setActiveId(null)}
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
-            {columns.map(({ stage, deals: columnDeals }) => (
-              <Column key={stage} stage={stage} count={columnDeals.length}>
+            {columns.map(({ stage, deals: columnDeals, total }) => (
+              <Column key={stage} stage={stage} count={columnDeals.length} total={total}>
                 {columnDeals.length === 0 ? (
                   <p className="p-2 text-center text-xs text-zinc-400">
                     {activeDeal ? "Drop here" : "Empty"}

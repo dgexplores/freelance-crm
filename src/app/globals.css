@@ -69,7 +69,8 @@ body {
   .ai-shimmer,
   .animate-fade-up,
   .marquee-track,
-  .card-enter {
+  .card-enter,
+  .flow-dash {
     animation: none;
   }
   .ai-caret::after {
@@ -114,4 +115,13 @@ body {
 
 .card-enter {
   animation: card-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -24; }
+}
+
+.flow-dash {
+  stroke-dasharray: 6 6;
+  animation: dash-flow 1.2s linear infinite;
 }

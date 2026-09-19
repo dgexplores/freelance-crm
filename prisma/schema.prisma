@@ -36,6 +36,7 @@ model User {
   facts              Fact[]
   accounts           Account[]
   sessions           Session[]
+  subscription       Subscription?
 }
 
 // better-auth tables (Google OAuth, sessions)
@@ -83,6 +84,19 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+}
+
+// Stripe billing + AI metering (one row per user, created on first checkout).
+model Subscription {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId String?
+  stripeSubId      String?
+  status           String   @default("free") // free | active | past_due | canceled
+  aiUsed           Int      @default(0)
+  periodStart      DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Contact {
