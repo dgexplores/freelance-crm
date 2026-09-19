@@ -4,6 +4,9 @@ import { loadBoardData } from "@/app/board/board-data";
 
 export const metadata = { title: "Pipeline | Inbox CRM" };
 
+// Per-user data — never prerender at build time (needs request DB access).
+export const dynamic = "force-dynamic";
+
 export default async function BoardPage() {
   const user = await getUser();
   if (!user) return null; // middleware handles redirect

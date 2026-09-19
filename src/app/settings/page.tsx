@@ -5,6 +5,9 @@ import { SettingsClient } from "./settings-client";
 
 export const metadata = { title: "Settings | Inbox CRM" };
 
+// Per-user data — never prerender at build time (needs request DB access).
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const user = await getUser();
   if (!user) return null;
