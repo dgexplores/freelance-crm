@@ -32,7 +32,15 @@ export default function Home() {
   return (
     <main className="w-full max-w-full overflow-x-hidden bg-zinc-950 text-white">
       {/* ATTENTION — cinematic center hero */}
-      <section className="grain relative flex min-h-[108svh] flex-col items-center justify-center overflow-hidden px-6 pb-24 pt-32 text-center">
+      <section className="grain relative flex min-h-[108svh] flex-col items-center justify-center overflow-hidden bg-zinc-950 px-6 pb-24 pt-32 text-center">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 55% 40% at 20% 15%, rgba(52,211,153,0.14) 0%, transparent 70%), radial-gradient(ellipse 50% 38% at 85% 80%, rgba(139,92,246,0.16) 0%, transparent 70%), #09090b",
+          }}
+        />
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-cover bg-center opacity-60 grayscale contrast-125"
