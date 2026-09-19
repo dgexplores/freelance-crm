@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   const user = await getUser();
   if (!user) {
     return Response.json({ error: "Not authenticated." }, { status: 401 });
@@ -20,8 +21,17 @@ export async function POST(request: Request) {
     try {
       const body = (await request.json()) as { dealId?: unknown; days?: unknown };
       if (typeof body?.dealId === "string" && body.dealId) dealId = body.dealId;
-      const n = Number(body?.days);
-      if (Number.isFinite(n) && n >= 1) days = Math.floor(n);
+      if (body?.days !== undefined) {
+        const n = Number(body.days);
+        const floored = Math.floor(n);
+        if (!Number.isFinite(n) || floored < 1 || floored > 30) {
+          return Response.json(
+            { error: "Invalid days parameter. Must be an integer between 1 and 30." },
+            { status: 400 },
+          );
+        }
+        days = floored;
+      }
     } catch {
       // fall through to validation below
     }
@@ -30,6 +40,8 @@ export async function POST(request: Request) {
     }
 
     const stream = await streamFollowUpNudge(user.id, dealId, days);
+    // Pre-stream errors map to JSON via aiErrorResponse; mid-stream failures
+    // propagate as an aborted body once headers are sent.
     return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -38,6 +50,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
-    return aiErrorResponse(err);
+    return aiErrorResponse(err, requestId);
   }
 }

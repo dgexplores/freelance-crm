@@ -3,25 +3,29 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const checks = {
-    database: false,
-    timestamp: new Date().toISOString(),
-    version: process.env["npm_package_version"] ?? "0.1.0",
-  };
+  let database = false;
 
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    checks.database = true;
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("DB timeout")), 5_000),
+      ),
+    ]);
+    database = true;
   } catch {
-    checks.database = false;
+    database = false;
   }
 
-  const healthy = checks.database;
+  const ok = database;
 
-  return Response.json(checks, {
-    status: healthy ? 200 : 503,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate",
+  return Response.json(
+    { ok, database },
+    {
+      status: ok ? 200 : 503,
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
     },
-  });
+  );
 }

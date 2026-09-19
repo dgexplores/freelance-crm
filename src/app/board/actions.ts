@@ -61,10 +61,9 @@ export async function moveDealAction(
       ...(toStage === "WON" && !deal.wonAt ? { wonAt: new Date() } : {}),
       // Leaving WON clears the timestamp; stale wonAt on an open deal is a lie.
       ...(deal.stage === "WON" && toStage !== "WON" ? { wonAt: null } : {}),
-      // Entering LOST without a reason keeps the field honest for reporting.
-      ...(toStage === "LOST" && !deal.lostReason
-        ? { lostReason: "No reason recorded." }
-        : {}),
+      // Reopening clears the loss reason; entering LOST leaves it null until
+      // a real reason is recorded elsewhere.
+      ...(toStage !== "LOST" && deal.lostReason ? { lostReason: null } : {}),
     },
   });
   revalidatePath("/board");

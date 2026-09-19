@@ -57,6 +57,10 @@ model Account {
   providerId           String
   userId               String
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SECURITY: access/refresh/id tokens stored plaintext (better-auth writes
+  // these directly). Needs TOKEN_ENCRYPTION_KEY envelope (see
+  // src/lib/token-crypto.ts) before public launch. No schema change needed:
+  // encrypted payload fits in the existing String columns.
   accessToken          String?
   refreshToken         String?
   idToken              String?
@@ -66,6 +70,8 @@ model Account {
   password             String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 model Verification {
@@ -75,6 +81,8 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Contact {
@@ -118,7 +126,7 @@ model Deal {
 
 model Email {
   id        String         @id @default(cuid())
-  gmailId   String?
+  gmailId   String
   threadId  String?
   subject   String
   fromAddr  String
@@ -148,6 +156,11 @@ model Task {
   deal      Deal     @relation(fields: [dealId], references: [id])
   createdAt DateTime @default(now())
 
+  // No @@unique here on purpose: a deal legitimately accrues many done
+  // tasks over its lifetime (the old @@unique([dealId, kind, done]) capped
+  // history at 1 done row ever). Pending-task idempotency is enforced at
+  // the application level (findFirst done:false before create); the P2002
+  // catch in scheduler.ts is retained as a harmless race guard.
   @@index([dealId, kind, done])
   @@index([dueAt])
 }

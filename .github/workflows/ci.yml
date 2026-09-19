@@ -124,7 +124,7 @@ jobs:
 
       - name: Deploy to Vercel Preview
         if: steps.secrets.outputs.configured == 'true'
-        run: npx --yes vercel@latest deploy --yes
+        run: npx --yes vercel@42 deploy --yes
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -152,7 +152,7 @@ jobs:
 
       - name: Deploy to Vercel Production
         if: steps.secrets.outputs.configured == 'true'
-        run: npx --yes vercel@latest deploy --prod --yes
+        run: npx --yes vercel@42 deploy --prod --yes
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

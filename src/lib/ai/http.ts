@@ -8,7 +8,7 @@ import { logger } from "@/lib/logger";
  * Mapping is instanceof-based via the typed error hierarchy — message
  * strings are never parsed.
  */
-export function aiErrorResponse(err: unknown): Response {
+export function aiErrorResponse(err: unknown, requestId?: string): Response {
   if (err instanceof RateLimitError) {
     return Response.json(
       { error: err.message },
@@ -27,7 +27,7 @@ export function aiErrorResponse(err: unknown): Response {
   }
 
   if (err instanceof GeminiApiError) {
-    logger.error("Gemini upstream failure", { status: err.status, error: err.message });
+    logger.error("Gemini upstream failure", { status: err.status }, undefined, requestId);
     return Response.json(
       { error: "AI provider request failed. Try again shortly." },
       { status: 502 },
@@ -42,7 +42,7 @@ export function aiErrorResponse(err: unknown): Response {
   // Unknown errors: log full detail server-side, return a generic body so
   // internals never leak to clients.
   const detail = err instanceof Error ? err.stack ?? err.message : String(err);
-  logger.error("Unhandled error in AI route", { error: detail });
+  logger.error("Unhandled error in AI route", { error: detail }, undefined, requestId);
   return Response.json(
     { error: "Something went wrong. Please try again.", code: "internal" },
     { status: 500 },

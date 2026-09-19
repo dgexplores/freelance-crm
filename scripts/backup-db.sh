@@ -20,22 +20,9 @@ BACKUP_FILE="$BACKUP_DIR/freelance-crm_$TIMESTAMP.sql.gz"
 
 echo "[$(date)] Starting backup to $BACKUP_FILE"
 
-# Extract connection params from DATABASE_URL
-# postgresql://user:pass@host:port/db
-if [[ "$DATABASE_URL" =~ postgresql://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+) ]]; then
-  PGUSER="${BASH_REMATCH[1]}"
-  PGPASSWORD="${BASH_REMATCH[2]}"
-  PGHOST="${BASH_REMATCH[3]}"
-  PGPORT="${BASH_REMATCH[4]}"
-  PGDATABASE="${BASH_REMATCH[5]}"
-  export PGUSER PGPASSWORD PGHOST PGPORT PGDATABASE
-else
-  echo "ERROR: Could not parse DATABASE_URL" >&2
-  exit 1
-fi
-
-# Dump with compression
-pg_dump --no-owner --no-privileges --format=custom | gzip > "$BACKUP_FILE"
+# pg_dump reads DATABASE_URL natively (handles special chars, missing
+# port, and query strings like ?sslmode=require on Neon/Supabase).
+pg_dump "$DATABASE_URL" --no-owner --no-privileges --format=custom | gzip > "$BACKUP_FILE"
 
 if [[ $? -eq 0 ]]; then
   echo "[$(date)] Backup completed: $BACKUP_FILE"

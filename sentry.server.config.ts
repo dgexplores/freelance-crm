@@ -9,5 +9,11 @@ if (SENTRY_DSN) {
     environment: SENTRY_ENV,
     tracesSampleRate: 0.1,
     debug: false,
+    sendDefaultPii: false,
+    beforeSend(event) {
+      // Minimal PII scrub: drop request bodies (may hold tokens, emails).
+      if (event.request?.data) delete event.request.data;
+      return event;
+    },
   });
 }

@@ -1,6 +1,7 @@
 node_modules
 .next
-tests
+test/
+tests/
 coverage
 backups
 *.dump.gz

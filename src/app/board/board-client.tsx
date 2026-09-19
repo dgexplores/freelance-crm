@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -72,15 +72,22 @@ function MoveButtons({ deal }: { deal: DealCard }) {
   // Guard: if stage is not recognized, don't render move buttons
   if (index < 0) return null;
 
-  // Extract adjacent stages for TypeScript narrowing
+  // Extract adjacent stages for TypeScript narrowing; generic next/prev
+  // never point at terminal stages (PROPOSAL uses Won/Lost buttons).
   const prevStage = index > 0 ? STAGES[index - 1] : null;
-  const nextStage = index < STAGES.length - 2 ? STAGES[index + 1] : null;
+  const rawNext = index >= 0 && index + 1 < STAGES.length ? STAGES[index + 1] : null;
+  const nextStage = rawNext === "WON" || rawNext === "LOST" ? null : rawNext;
 
   async function move(to: (typeof STAGES)[number]) {
     setBusy(true);
-    const res = await moveDealAction(deal.id, to);
-    setBusy(false);
-    setMsg(res.ok ? null : res.message);
+    try {
+      const res = await moveDealAction(deal.id, to);
+      setMsg(res.ok ? null : res.message);
+    } catch {
+      setMsg("Move failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -251,13 +258,19 @@ export function BoardClient(props: {
   const [moving, setMoving] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  if (props.deals !== syncedFrom) {
-    setSyncedFrom(props.deals);
-    setDeals(props.deals);
-  }
+  useEffect(() => {
+    if (props.deals !== syncedFrom) {
+      // Intentional prop sync: server sends fresh deals after router.refresh().
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSyncedFrom(props.deals);
+      setDeals(props.deals);
+    }
+  }, [props.deals, syncedFrom]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // KeyboardSensor has no effect without a SortableContext; keyboard users
+    // use the per-card MoveButtons instead.
     useSensor(KeyboardSensor),
   );
 
@@ -266,19 +279,31 @@ export function BoardClient(props: {
       const current = deals.find((d) => d.id === dealId);
       if (!current || current.stage === toStage) return;
 
+      const prevStage = current.stage;
       setMoving(true);
-      // Optimistic: move locally now.
+      setError(null);
+      // Optimistic: move locally now, roll back on failure.
       setDeals((prev) =>
         prev.map((d) => (d.id === dealId ? { ...d, stage: toStage } : d)),
       );
-      const res = await moveDealAction(dealId, toStage);
-      if (!res.ok) {
-        setError(res.message);
-        router.refresh(); // snap back to server truth
+      const revert = () =>
+        setDeals((prev) =>
+          prev.map((d) => (d.id === dealId ? { ...d, stage: prevStage } : d)),
+        );
+      try {
+        const res = await moveDealAction(dealId, toStage);
+        if (!res.ok) {
+          revert();
+          setError(res.message);
+        }
+      } catch {
+        revert();
+        setError("Move failed.");
+      } finally {
+        setMoving(false);
       }
-      setMoving(false);
     },
-    [deals, router],
+    [deals],
   );
 
   function onDragStart(event: DragStartEvent) {
@@ -289,9 +314,26 @@ export function BoardClient(props: {
     setActiveId(null);
     const overId = event.over?.id;
     if (!overId || typeof overId !== "string") return;
-    const toStage = overId.replace(/^col:/, "");
-    if (!STAGES.includes(toStage as (typeof STAGES)[number])) return;
-    void applyMove(String(event.active.id), toStage);
+    const activeDealId = String(event.active.id);
+    let toStage: string;
+    if (overId.startsWith("col:")) {
+      toStage = overId.slice("col:".length);
+    } else {
+      // Dropped onto a card: resolve to that deal's stage; same card = no-op.
+      const activeDeal = deals.find((d) => d.id === activeDealId);
+      const overDeal = deals.find((d) => d.id === overId);
+      if (!overDeal) {
+        setError("Drop onto a column to move a deal.");
+        return;
+      }
+      if (overDeal.id === activeDealId || (activeDeal && overDeal.stage === activeDeal.stage)) return;
+      toStage = overDeal.stage;
+    }
+    if (!STAGES.includes(toStage as (typeof STAGES)[number])) {
+      setError(`Unknown stage: ${toStage}.`);
+      return;
+    }
+    void applyMove(activeDealId, toStage);
   }
 
   async function importMail() {

@@ -162,27 +162,36 @@ function sseToPlainText(): TransformStream<Uint8Array, Uint8Array> {
   const encoder = new TextEncoder();
   let buffer = "";
 
+  function emitLine(line: string, controller: TransformStreamDefaultController<Uint8Array>) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") return;
+    try {
+      const json = JSON.parse(payload) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const text =
+        json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+      if (text) controller.enqueue(encoder.encode(text));
+    } catch {
+      // Malformed frame — skip it rather than corrupting the stream.
+    }
+  }
+
   return new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       buffer += decoder.decode(chunk, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const payload = trimmed.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        try {
-          const json = JSON.parse(payload) as {
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
-          const text =
-            json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-          if (text) controller.enqueue(encoder.encode(text));
-        } catch {
-          // Malformed frame — skip it rather than corrupting the stream.
-        }
-      }
+      for (const line of lines) emitLine(line, controller);
+    },
+    flush(controller) {
+      buffer += decoder.decode();
+      if (!buffer.trim()) return;
+      // Trailing buffer may hold a final SSE line without a newline.
+      for (const line of buffer.split("\n")) emitLine(line, controller);
+      buffer = "";
     },
   });
 }

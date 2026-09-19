@@ -2,15 +2,15 @@
 #
 # Restore a database backup produced by backup-db.sh.
 # Usage:
-#   ./scripts/restore-db.sh backups/freelance-2026-08-25.dump.gz   # explicit file
+#   ./scripts/restore-db.sh backups/freelance-crm_20260825_020000.sql.gz   # explicit file
 #   ./scripts/restore-db.sh                                        # pick latest in BACKUP_DIR
 #
-# Env: DATABASE_URL (required), BACKUP_DIR (default ./backups)
+# Env: DATABASE_URL (required), BACKUP_DIR (default /var/backups/freelance-crm)
 # Safety: prompts before wiping the target schema.
 
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-./backups}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/freelance-crm}"
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "ERROR: DATABASE_URL is not set." >&2
@@ -24,9 +24,9 @@ fi
 
 file="${1:-}"
 if [[ -z "$file" ]]; then
-  latest=$(ls -t "$BACKUP_DIR"/*.dump.gz 2>/dev/null | head -n 1 || true)
+  latest=$(ls -t "$BACKUP_DIR"/freelance-crm_*.sql.gz 2>/dev/null | head -n 1 || true)
   if [[ -z "$latest" ]]; then
-    echo "ERROR: no .dump.gz backups found in $BACKUP_DIR" >&2
+    echo "ERROR: no freelance-crm_*.sql.gz backups found in $BACKUP_DIR" >&2
     exit 1
   fi
   file="$latest"

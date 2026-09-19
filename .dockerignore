@@ -16,5 +16,6 @@ SETUP.md
 .claude
 .agents
 .windsurf
-test
+test/
+tests/
 coverage

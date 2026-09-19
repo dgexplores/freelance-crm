@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { listStaleDeals, generateFollowUpNudge, DEFAULT_STALE_DAYS } from "@/lib/ai/nudge";
 import { logger } from "@/lib/logger";
@@ -35,14 +36,27 @@ export async function scheduleFollowUpsForUser(
 
     try {
       const nudge = await generateFollowUpNudge(userId, stale.dealId, days);
-      await prisma.task.create({
-        data: {
-          dealId: stale.dealId,
-          kind: "follow_up",
-          dueAt: nextMorningAt9(),
-          reason: `Auto-scheduled: deal idle ${stale.idleDays}d. ${nudge.draft.slice(0, 200)}...`,
-        },
-      });
+      try {
+        await prisma.task.create({
+          data: {
+            dealId: stale.dealId,
+            kind: "follow_up",
+            dueAt: nextMorningAt9(),
+            reason: `Auto-scheduled: deal idle ${stale.idleDays}d. ${nudge.draft.slice(0, 200)}...`,
+          },
+        });
+      } catch (createErr) {
+        // Harmless race guard: with @@index (not unique) on Task this
+        // never fires, but keep it so concurrent scheduler runs stay safe
+        // if a unique constraint is ever reintroduced for pending tasks.
+        if (
+          createErr instanceof Prisma.PrismaClientKnownRequestError &&
+          createErr.code === "P2002"
+        ) {
+          continue;
+        }
+        throw createErr;
+      }
       scheduled += 1;
     } catch (err) {
       errors.push(`${stale.title}: ${err instanceof Error ? err.message : "Failed"}`);

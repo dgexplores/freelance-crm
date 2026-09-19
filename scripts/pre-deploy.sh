@@ -54,8 +54,9 @@ npm run build
 echo "Verifying database connectivity..."
 npx prisma db execute --stdin <<< "SELECT 1;" > /dev/null
 
-# 7. Check for pending migrations
-echo "Checking migration status..."
-npx prisma migrate status
+# 7. Validate Prisma schema (repo uses db:push, no prisma/migrations/)
+echo "Validating Prisma schema..."
+npx prisma validate
+echo "Skipping migrate status check (db:push workflow, no migrations directory)."
 
 echo "=== All pre-deployment checks passed ==="

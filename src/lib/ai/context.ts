@@ -128,8 +128,12 @@ export function formatEmails(
     .slice(0, max)
     .map((e, i) => {
       const when = e.receivedAt.toISOString().slice(0, 10);
-      const body = truncate(e.body.replace(/\s+/g, " "), 500);
-      return `[${i + 1}] ${e.direction.toUpperCase()} | ${when} | subject: ${e.subject}\n${body}`;
+      const body = truncate(e.body.replace(/\s+/g, " "), 500).replace(
+        /<\/untrusted-email>/gi,
+        "[untrusted-email]",
+      );
+      const subject = e.subject.replace(/<\/untrusted-email>/gi, "[untrusted-email]");
+      return `<untrusted-email id=${i + 1} direction=${e.direction.toUpperCase()} date=${when}>\nsubject: ${subject}\n${body}\n</untrusted-email>`;
     })
     .join("\n\n");
 }

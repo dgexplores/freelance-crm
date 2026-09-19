@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   const user = await getUser();
   if (!user) {
     return Response.json({ error: "Not authenticated." }, { status: 401 });
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
     rateLimit(`ai:proposal:${user.id}`, RATE_LIMIT);
     const dealId = await readDealId(request);
     const stream = await streamProposalDraft(user.id, dealId);
+    // Pre-stream errors map to JSON via aiErrorResponse; mid-stream failures
+    // propagate as an aborted body once headers are sent.
     return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -25,6 +28,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
-    return aiErrorResponse(err);
+    return aiErrorResponse(err, requestId);
   }
 }

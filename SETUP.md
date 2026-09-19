@@ -70,10 +70,11 @@ OAuth scope is read-only. The CRM can list and read messages and can never send,
 |---|---|---|
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `BETTER_AUTH_SECRET` | Yes | `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | Yes | App origin (`http://localhost:3000` locally, production URL in prod) |
 | `GOOGLE_CLIENT_ID` | OAuth | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | OAuth | Google OAuth client secret |
-| `OPENAI_API_KEY` | AI features | LLM for briefs, drafts, stage analysis |
-| `STRIPE_SECRET_KEY` | Billing (later) | Stripe secret key |
+| `GEMINI_API_KEY` | AI features | LLM for briefs, drafts, stage analysis |
+| `CRON_SECRET` | Cron | `openssl rand -base64 32` for `GET /api/cron/stale-followups` |
 
 Generate the auth secret:
 
@@ -87,7 +88,7 @@ openssl rand -base64 32
 2. Push the schema: `DATABASE_URL="<neon string>" npx prisma db push`.
 3. Deploy the app to Vercel: import the repo, set the env vars from step 5, deploy.
 4. Add the production redirect URI from step 4 to your Google OAuth client.
-5. In Vercel, set `NEXTAUTH_URL`/callback domain to your production origin.
+5. In Vercel, set `BETTER_AUTH_URL`/callback domain to your production origin.
 
 Faster path: install the Vercel Postgres or Neon integration, which sets `DATABASE_URL` for you, then rerun `prisma db push` against it.
 

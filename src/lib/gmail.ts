@@ -8,6 +8,10 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] ?? "";
 const CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
 
+// Single-flight guard: concurrent imports for the same user share one
+// refresh request instead of firing N token refreshes at once.
+const refreshInFlight = new Map<string, Promise<string>>();
+
 export type ImportedMessage = {
   gmailId: string;
   threadId: string | null;
@@ -29,6 +33,11 @@ export class GmailImportError extends Error {
 
 /**
  * Read-only, forward-only Gmail import.
+ *
+ * SECURITY: Account access/refresh tokens are read here as plaintext (see
+ * Account model comment). Envelope encryption helper exists at
+ * src/lib/token-crypto.ts but is intentionally NOT wired in yet – better-auth
+ * owns the token write path, so decrypt-on-read alone would break refresh.
  *
  * Safety invariants:
  *  - Only the Gmail API read endpoint (`gmail.readonly` scope) is ever called.
@@ -69,36 +78,52 @@ export async function getGmailAccessToken(userId: string): Promise<string> {
     );
   }
 
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: account.refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) {
-    throw new GmailImportError(
-      `Failed to refresh Google access token (${res.status}). Re-auth with Google.`,
-      401,
-    );
+  const inFlight = refreshInFlight.get(userId);
+  if (inFlight) return inFlight;
+
+  const refreshToken = account.refreshToken;
+  const accountId = account.id;
+  const refreshPromise = (async () => {
+    const res = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!res.ok) {
+      throw new GmailImportError(
+        `Failed to refresh Google access token (${res.status}). Re-auth with Google.`,
+        401,
+      );
+    }
+    const data = (await res.json()) as {
+      access_token: string;
+      expires_in?: number;
+    };
+    await prisma.account.update({
+      where: { id: accountId },
+      data: {
+        accessToken: data.access_token,
+        accessTokenExpiresAt: new Date(
+          Date.now() + (data.expires_in ?? 3600) * 1000,
+        ),
+      },
+    });
+    return data.access_token;
+  })();
+
+  refreshInFlight.set(userId, refreshPromise);
+  try {
+    return await refreshPromise;
+  } finally {
+    if (refreshInFlight.get(userId) === refreshPromise) {
+      refreshInFlight.delete(userId);
+    }
   }
-  const data = (await res.json()) as {
-    access_token: string;
-    expires_in?: number;
-  };
-  await prisma.account.update({
-    where: { id: account.id },
-    data: {
-      accessToken: data.access_token,
-      accessTokenExpiresAt: new Date(
-        Date.now() + (data.expires_in ?? 3600) * 1000,
-      ),
-    },
-  });
-  return data.access_token;
 }
 
 function decodeBase64Url(value: string): string {
@@ -173,11 +198,19 @@ function isTransientGmailError(err: unknown): boolean {
   return false;
 }
 
+export type FetchMessagesResult = {
+  messages: ImportedMessage[];
+  /** True when more pages remained after `maxPages` — caller should surface this. */
+  truncated: boolean;
+  /** Messages dropped for empty From header (counted as skipped upstream). */
+  skippedEmptyFrom: number;
+};
+
 export async function fetchNewMessages(
   userId: string,
   sinceMs: number,
   opts: { maxPages?: number; pageSize?: number } = {},
-): Promise<ImportedMessage[]> {
+): Promise<FetchMessagesResult> {
   const maxPages = opts.maxPages ?? 10;
   const pageSize = opts.pageSize ?? 25;
 
@@ -185,6 +218,8 @@ export async function fetchNewMessages(
   const q = `in:inbox after:${Math.floor(sinceMs / 1000)}`;
 
   const imported: ImportedMessage[] = [];
+  let skippedEmptyFrom = 0;
+  let truncated = false;
   let nextPageToken: string | undefined;
   for (let page = 0; page < maxPages; page++) {
     const params = new URLSearchParams({
@@ -231,14 +266,18 @@ export async function fetchNewMessages(
           } satisfies ImportedMessage;
         }),
       );
-      imported.push(...results.filter((m) => m.fromAddr.trim() !== ""));
+      for (const m of results) {
+        if (m.fromAddr.trim() === "") skippedEmptyFrom += 1;
+        else imported.push(m);
+      }
     }
 
     nextPageToken = list.nextPageToken;
     if (!nextPageToken) break;
+    if (page === maxPages - 1) truncated = true;
   }
 
-  return imported;
+  return { messages: imported, truncated, skippedEmptyFrom };
 }
 
 export type ImportContext = {
@@ -283,5 +322,6 @@ export type ImportResult = {
   contacts: number;
   deals: number;
   facts: number;
+  truncated: boolean;
   errors: string[];
 };

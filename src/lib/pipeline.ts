@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   fetchNewMessages,
@@ -106,7 +107,7 @@ function buildFacts(
       claim: "Email text contains budget/rate/cost terms (keyword match — not a confirmed budget).",
       source: "email",
       strength: "suggestion",
-      applied: true,
+      applied: false,
       contactId,
       userId,
     });
@@ -119,7 +120,7 @@ function buildFacts(
       claim: "Email text mentions potential project/scope terms (keyword match — intent not confirmed).",
       source: "email",
       strength: "suggestion",
-      applied: true,
+      applied: false,
       contactId,
       userId,
     });
@@ -132,7 +133,7 @@ function buildFacts(
       claim: "Email text contains urgency/deadline terms (keyword match).",
       source: "email",
       strength: "suggestion",
-      applied: true,
+      applied: false,
       contactId,
       userId,
     });
@@ -156,11 +157,18 @@ export async function importGmail(
 
   logger.info("Starting Gmail import", { userId, firstRun: ctx.firstRun, sinceMs: ctx.sinceMs });
 
-  const messages = await fetchNewMessages(userId, ctx.sinceMs);
+  const fetched = await fetchNewMessages(userId, ctx.sinceMs);
+  const messages = fetched.messages;
 
-  logger.info("Fetched messages from Gmail", { userId, count: messages.length });
+  logger.info("Fetched messages from Gmail", {
+    userId,
+    count: messages.length,
+    truncated: fetched.truncated,
+    skippedEmptyFrom: fetched.skippedEmptyFrom,
+  });
 
   const pipeline = await runPipeline(userId, messages);
+  pipeline.skipped += fetched.skippedEmptyFrom;
 
   const boundary = await prisma.user.findUnique({
     where: { id: userId },
@@ -174,8 +182,16 @@ export async function importGmail(
       (max, m) => (!max || m.receivedAt > max ? m.receivedAt : max),
       null,
     );
-    await recordForwardOnlyBoundary(userId, newestFetched ?? new Date());
+    const newBoundary = newestFetched ?? new Date();
+    await recordForwardOnlyBoundary(userId, newBoundary);
     logger.info("Gmail import completed successfully", { userId, ...pipeline });
+    return {
+      boundary: newBoundary,
+      firstRun: ctx.firstRun,
+      fetched: messages.length + fetched.skippedEmptyFrom,
+      truncated: fetched.truncated,
+      ...pipeline,
+    };
   } else {
     logger.warn("Gmail import completed with errors", { userId, ...pipeline });
   }
@@ -183,7 +199,8 @@ export async function importGmail(
   return {
     boundary: boundary?.gmailSyncStartedAt ?? null,
     firstRun: ctx.firstRun,
-    fetched: messages.length,
+    fetched: messages.length + fetched.skippedEmptyFrom,
+    truncated: fetched.truncated,
     ...pipeline,
   };
 }
@@ -311,7 +328,7 @@ export async function runPipeline(
       result.imported += 1;
       if (staged.isNewContact) {
         result.contacts += 1;
-        logger.debug("Created new contact", { userId, contactId: staged.contactId, email: senderEmail });
+        logger.debug("Created new contact", { userId, contactId: staged.contactId });
       }
       if (staged.isNewDeal) {
         result.deals += 1;
@@ -322,6 +339,11 @@ export async function runPipeline(
         logger.debug("Created facts", { userId, contactId: staged.contactId, factCount: staged.factCount });
       }
     } catch (err) {
+      // Concurrent import won the race (@@unique [userId, gmailId]) — safe overlap, not an error.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        result.skipped += 1;
+        continue;
+      }
       const errorMsg = `Message ${msg.gmailId}: ${err instanceof Error ? err.message : String(err)}`;
       result.errors.push(errorMsg);
       logger.error("Failed to process message", { userId, gmailId: msg.gmailId, error: errorMsg });

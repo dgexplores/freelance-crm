@@ -20,7 +20,12 @@ export async function scheduleStaleFollowUpsAction(
   }
 
   try {
-    const result = await scheduleFollowUpsForUser(user.id, days);
+    const floored = Math.floor(days);
+    if (!Number.isFinite(days) || floored < 1 || floored > 30) {
+      const message = "Invalid days parameter. Must be an integer between 1 and 30.";
+      return { ok: false, message, scheduled: 0, errors: [message] };
+    }
+    const result = await scheduleFollowUpsForUser(user.id, floored);
     revalidatePath("/board");
     return {
       ok: true,

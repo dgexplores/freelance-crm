@@ -66,6 +66,12 @@ const STAGE_COLORS: Record<string, string> = {
   LOST: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+// Static classes only — dynamic `bg-${...}` names never survive Tailwind's scanner.
+const DIRECTION_STYLES: Record<string, string> = {
+  INBOUND: "bg-sky-50 text-sky-700",
+  OUTBOUND: "bg-violet-50 text-violet-700",
+};
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -128,6 +134,7 @@ export function DealDetailClient(props: {
   const [nudge, setNudge] = useState<string | null>(null);
   const [nudgeLoading, setNudgeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function handleGenerateBrief() {
     if (!props.hasRateCard) {
@@ -194,10 +201,14 @@ export function DealDetailClient(props: {
     }
   }
 
-  function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text);
-    setError("Copied to clipboard");
-    setTimeout(() => setError(null), 2000);
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Copy failed.");
+    }
   }
 
   return (
@@ -290,7 +301,7 @@ export function DealDetailClient(props: {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Pre-Call Brief</h2>
                     {!briefLoading && brief && (
-                      <button onClick={() => copyToClipboard(brief)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                      <button onClick={() => copyToClipboard(brief)} className="text-xs text-zinc-500 hover:text-zinc-700">{copied ? "Copied" : "Copy"}</button>
                     )}
                   </div>
                   {briefLoading && brief === null ? (
@@ -312,7 +323,7 @@ export function DealDetailClient(props: {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Proposal Draft</h2>
                     {!proposalLoading && proposal && (
-                      <button onClick={() => copyToClipboard(proposal)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                      <button onClick={() => copyToClipboard(proposal)} className="text-xs text-zinc-500 hover:text-zinc-700">{copied ? "Copied" : "Copy"}</button>
                     )}
                   </div>
                   {proposalLoading && proposal === null ? (
@@ -334,7 +345,7 @@ export function DealDetailClient(props: {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">Follow-Up Nudge</h2>
                     {!nudgeLoading && nudge && (
-                      <button onClick={() => copyToClipboard(nudge)} className="text-xs text-zinc-500 hover:text-zinc-700">Copy</button>
+                      <button onClick={() => copyToClipboard(nudge)} className="text-xs text-zinc-500 hover:text-zinc-700">{copied ? "Copied" : "Copy"}</button>
                     )}
                   </div>
                   {nudgeLoading && nudge === null ? (
@@ -440,7 +451,7 @@ export function DealDetailClient(props: {
                 <article key={email.id} className="rounded-lg border border-zinc-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div>
-                      <span className={`inline-block rounded-full bg-${email.direction === "INBOUND" ? "sky" : "violet"}-50 text-${email.direction === "INBOUND" ? "sky" : "violet"}-700 px-2 py-0.5 text-[11px] font-medium`}>
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${DIRECTION_STYLES[email.direction] ?? "bg-zinc-100 text-zinc-700"}`}>
                         {email.direction}
                       </span>
                       <span className="ml-2 text-xs text-zinc-400">{fmtDateTime(email.receivedAt)}</span>
@@ -479,8 +490,10 @@ export function DealDetailClient(props: {
                     </div>
                     <input
                       type="checkbox"
-                      checked={fact.applied}
+                      checked={fact.strength === "suggestion" ? false : fact.applied}
                       disabled
+                      title={fact.applied && fact.strength !== "suggestion" ? "Applied" : "Suggestion — not applied"}
+                      aria-label={fact.applied && fact.strength !== "suggestion" ? "Applied" : "Suggestion — not applied"}
                       className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-600"
                     />
                   </div>

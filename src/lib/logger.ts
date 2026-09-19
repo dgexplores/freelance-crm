@@ -18,12 +18,44 @@ function formatEntry(entry: LogEntry): string {
   return JSON.stringify(entry);
 }
 
+// Keys whose values may carry PII (email addresses, subjects, bodies).
+const PII_KEYS = new Set([
+  "email",
+  "senderemail",
+  "contactemail",
+  "subject",
+  "body",
+  "snippet",
+  "fromaddr",
+  "from",
+]);
+
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+function redactValue(value: unknown): unknown {
+  if (typeof value === "string") return value.replace(EMAIL_RE, "[redacted-email]");
+  if (Array.isArray(value)) return value.map(redactValue);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = PII_KEYS.has(k.toLowerCase()) ? "[redacted]" : redactValue(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function redactContext(context?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!context) return context;
+  return redactValue(context) as Record<string, unknown>;
+}
+
 function log(level: LogLevel, message: string, context?: Record<string, unknown>, userId?: string, requestId?: string) {
   const entry: LogEntry = {
     timestamp: new Date().toISOString(),
     level,
-    message,
-    context,
+    message: String(redactValue(message)),
+    context: redactContext(context),
     userId,
     requestId,
   };
