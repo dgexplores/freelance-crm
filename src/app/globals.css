@@ -12,12 +12,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* There is deliberately no `prefers-color-scheme: dark` block here.
+ *
+ * This app is a light-only design: every page hardcodes a light surface
+ * (bg-zinc-50) and there is not a single `dark:` variant in the codebase. The
+ * create-next-app default shipped a dark override that flipped --background to
+ * #0a0a0a and --foreground to #ededed, which fought every page's own colours:
+ * any element that did not paint its own background showed near-black, and any
+ * text that inherited `color` went near-white. The Settings page was the
+ * visible casualty — it set no background, so on a dark-mode system it rendered
+ * text-zinc-700 on a #0a0a0a body.
+ *
+ * Adding a dark theme means styling every surface, not just these two
+ * variables. Until then, pin the palette. */
 
 body {
   background: var(--background);

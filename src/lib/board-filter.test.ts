@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { DAY_MS } from "@/lib/staleness";
 import {
-  DAY_MS,
   dealIdleDays,
   dealIsStale,
   filterDeals,

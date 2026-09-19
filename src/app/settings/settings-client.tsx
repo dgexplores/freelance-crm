@@ -83,144 +83,150 @@ export function SettingsClient(props: {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
-          Rate Card
-        </h2>
-        <p className="mb-4 text-sm text-zinc-600">
-          Your rate card powers AI briefs and proposal drafts. Use markdown — the AI reads
-          the tables and terms verbatim. Never invents prices.
-        </p>
+    // Every sibling page hardcodes a light background here. Without it this
+    // page inherits `body`'s theme-aware --background, which is near-black on a
+    // dark-mode system — and this page's text is text-zinc-700, so it rendered
+    // near-black on near-black.
+    <div className="min-h-screen bg-zinc-50">
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+            Rate Card
+          </h2>
+          <p className="mb-4 text-sm text-zinc-600">
+            Your rate card powers AI briefs and proposal drafts. Use markdown — the AI reads
+            the tables and terms verbatim. Never invents prices.
+          </p>
 
-        {saved && (
-          <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-            Rate card saved
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            {error}
-          </div>
-        )}
-
-        <textarea
-          value={rateCard}
-          onChange={(e) => setRateCard(e.target.value)}
-          className="w-full min-h-[400px] rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-mono text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-          placeholder={DEFAULT_RATE_CARD}
-          spellCheck={false}
-        />
-
-        <div className="mt-3 flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
-          >
-            {saving ? "Saving…" : "Save rate card"}
-          </button>
-          {!props.rateCard && (
-            <button
-              onClick={() => setRateCard(DEFAULT_RATE_CARD)}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
-              Use default template
-            </button>
+          {saved && (
+            <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              Rate card saved
+            </div>
           )}
-        </div>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
-          Gmail Sync
-        </h2>
-        <div className="rounded-lg border border-zinc-200 bg-white p-4">
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <dt className="text-sm text-zinc-500">Sync boundary</dt>
-            <dd className="text-sm font-mono text-zinc-900">
-              {props.gmailSyncStartedAt
-                ? new Date(props.gmailSyncStartedAt).toLocaleString()
-                : "Not set — first import reads last 24h only"}
-            </dd>
-            <dt className="text-sm text-zinc-500">Scope</dt>
-            <dd className="text-sm text-zinc-700">
-              Read-only (gmail.readonly). Never sends, moves, archives, or deletes.
-            </dd>
-            <dt className="text-sm text-zinc-500">Mode</dt>
-            <dd className="text-sm text-zinc-700">
-              Forward-only. Boundary recorded after first successful import. Older mail
-              never imported.
-            </dd>
-          </dl>
-        </div>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
-          Account
-        </h2>
-        <div className="rounded-lg border border-zinc-200 bg-white p-4">
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <dt className="text-sm text-zinc-500">Name</dt>
-            <dd className="text-sm text-zinc-900">{props.userName || "Not set"}</dd>
-            <dt className="text-sm text-zinc-500">Email</dt>
-            <dd className="text-sm text-zinc-900">{props.userEmail}</dd>
-          </dl>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
-          Your data
-        </h2>
-
-        <div className="rounded-lg border border-zinc-200 bg-white p-4">
-          <h3 className="text-sm font-medium text-zinc-900">Export everything</h3>
-          <p className="mt-1 text-sm text-zinc-600">
-            Downloads a JSON file with your profile, rate card, contacts, deals, emails,
-            facts, and tasks. OAuth tokens are excluded — they are credentials, not data.
-          </p>
-          <a
-            href="/api/account/export"
-            download
-            className="mt-3 inline-block rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-          >
-            Download my data
-          </a>
-        </div>
-
-        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50/50 p-4">
-          <h3 className="text-sm font-medium text-rose-800">Delete account</h3>
-          <p className="mt-1 text-sm text-rose-700">
-            Removes your account and every contact, deal, email, fact, and task in it. This
-            cannot be undone and there is no backup of it on our side.
-          </p>
-
-          {deleteError && (
-            <div className="mt-3 rounded-md bg-white px-3 py-2 text-xs text-rose-700">
-              {deleteError}
+          {error && (
+            <div className="mb-4 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {error}
             </div>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <input
-              value={confirmWord}
-              onChange={(e) => setConfirmWord(e.target.value)}
-              placeholder={`Type ${DELETE_CONFIRMATION_WORD} to confirm`}
-              aria-label={`Type ${DELETE_CONFIRMATION_WORD} to confirm account deletion`}
-              className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-rose-300 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
-            />
+          <textarea
+            value={rateCard}
+            onChange={(e) => setRateCard(e.target.value)}
+            className="w-full min-h-[400px] rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-mono text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            placeholder={DEFAULT_RATE_CARD}
+            spellCheck={false}
+          />
+
+          <div className="mt-3 flex items-center gap-3">
             <button
-              onClick={() => void handleDelete()}
-              disabled={!canDelete}
-              className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
             >
-              {deleting ? "Deleting…" : "Permanently delete"}
+              {saving ? "Saving…" : "Save rate card"}
             </button>
+            {!props.rateCard && (
+              <button
+                onClick={() => setRateCard(DEFAULT_RATE_CARD)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              >
+                Use default template
+              </button>
+            )}
           </div>
-        </div>
-      </section>
+        </section>
+
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+            Gmail Sync
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white p-4">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <dt className="text-sm text-zinc-500">Sync boundary</dt>
+              <dd className="text-sm font-mono text-zinc-900">
+                {props.gmailSyncStartedAt
+                  ? new Date(props.gmailSyncStartedAt).toLocaleString()
+                  : "Not set — first import reads last 24h only"}
+              </dd>
+              <dt className="text-sm text-zinc-500">Scope</dt>
+              <dd className="text-sm text-zinc-700">
+                Read-only (gmail.readonly). Never sends, moves, archives, or deletes.
+              </dd>
+              <dt className="text-sm text-zinc-500">Mode</dt>
+              <dd className="text-sm text-zinc-700">
+                Forward-only. Boundary recorded after first successful import. Older mail
+                never imported.
+              </dd>
+            </dl>
+          </div>
+        </section>
+
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+            Account
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white p-4">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <dt className="text-sm text-zinc-500">Name</dt>
+              <dd className="text-sm text-zinc-900">{props.userName || "Not set"}</dd>
+              <dt className="text-sm text-zinc-500">Email</dt>
+              <dd className="text-sm text-zinc-900">{props.userEmail}</dd>
+            </dl>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+            Your data
+          </h2>
+
+          <div className="rounded-lg border border-zinc-200 bg-white p-4">
+            <h3 className="text-sm font-medium text-zinc-900">Export everything</h3>
+            <p className="mt-1 text-sm text-zinc-600">
+              Downloads a JSON file with your profile, rate card, contacts, deals, emails,
+              facts, and tasks. OAuth tokens are excluded — they are credentials, not data.
+            </p>
+            <a
+              href="/api/account/export"
+              download
+              className="mt-3 inline-block rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+            >
+              Download my data
+            </a>
+          </div>
+
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50/50 p-4">
+            <h3 className="text-sm font-medium text-rose-800">Delete account</h3>
+            <p className="mt-1 text-sm text-rose-700">
+              Removes your account and every contact, deal, email, fact, and task in it. This
+              cannot be undone and there is no backup of it on our side.
+            </p>
+
+            {deleteError && (
+              <div className="mt-3 rounded-md bg-white px-3 py-2 text-xs text-rose-700">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <input
+                value={confirmWord}
+                onChange={(e) => setConfirmWord(e.target.value)}
+                placeholder={`Type ${DELETE_CONFIRMATION_WORD} to confirm`}
+                aria-label={`Type ${DELETE_CONFIRMATION_WORD} to confirm account deletion`}
+                className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-rose-300 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+              />
+              <button
+                onClick={() => void handleDelete()}
+                disabled={!canDelete}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {deleting ? "Deleting…" : "Permanently delete"}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

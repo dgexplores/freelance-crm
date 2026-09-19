@@ -201,3 +201,118 @@ Unit tests added: `staleness.test.ts`, `board-filter.test.ts`, `account.test.ts`
 sandbox. The new vitest files are written but have never been executed — the behaviour they
 assert *is* verified, but through the harness rather than through vitest. Run
 `npm run predeploy` before merging.
+
+---
+
+# Session Log — 2026-09-17/19 (test execution + light-only theme)
+
+## Why this pass
+
+The previous pass ended with a caveat: *"The new vitest files are written but have never been
+executed — the behaviour they assert is verified, but through the harness rather than through
+vitest."* A test that has never run is documentation, not verification. This pass closed that
+gap, and then fixed the two defects it exposed.
+
+## What was done
+
+### 1. The test suite was executed for the first time — 83 passed, 0 failed
+
+`npm test` had never run in this engagement (`npm ci` is blocked in the sandbox, so `vitest`
+cannot be installed). A dependency-free shim standing in for the `vitest` API was built —
+`describe` / `it` / `expect` with the matchers these files use, `vi.fn`, the four hooks, and the
+asymmetric matchers (`expect.objectContaining` and friends). Each of the seven files is bundled
+and run separately so module and mock state is isolated per file, the way vitest isolates by
+default. The factories from `vitest.setup.ts` are provided as real modules through bundler
+aliases, so the files themselves are unmodified.
+
+Result: **83 passed, 0 failed** across `account`, `board-filter`, `errors`, `gmail`, `logger`,
+`pipeline`, and `staleness`.
+
+### 2. A real defect this exposed: `board-filter.test.ts` could not link
+
+```
+✘ [ERROR] No matching export in "src/lib/board-filter.ts" for import "DAY_MS"
+    src/lib/board-filter.test.ts:3:2
+```
+
+The test imported `DAY_MS` from `@/lib/board-filter`, which never exported it — the constant
+lives in `@/lib/staleness`. This is not a shim artefact: a real `vitest` run fails at link time
+the same way, so `npm test` was red as committed. Fixed by importing `DAY_MS` from the module
+that defines it; the assertions are untouched. Widening `board-filter`'s public surface to
+re-export a constant the test only uses to build fixtures would have been the wrong fix.
+
+### 3. The ordering assertions were proved load-bearing
+
+`account.test.ts` asserts that children are deleted before their parents (Task → Deal,
+Deal/Fact/Email → Contact) by comparing `mock.invocationCallOrder` across different mocks. A test
+that passes for the wrong reason is worse than no test, so it was mutation-tested: swapping
+`deal.deleteMany` above `task.deleteMany` in `deleteUserData` produced **exactly one** failure —
+the ordering test — and nothing else. The assertion catches the foreign-key violation it claims
+to.
+
+### 4. Settings rendered near-black on near-black on a dark-mode system
+
+`settings-client.tsx` set no background of its own, so it inherited `body`'s theme-aware
+`--background`. On a system with a dark preference that is `#0a0a0a`, while the page's text is
+`text-zinc-700` — effectively unreadable. Every sibling page (`board`, the deal page, sign-in,
+home, all four error boundaries, the skeletons) hardcodes `min-h-screen bg-zinc-50`; Settings was
+the only one that did not. Added the same wrapper.
+
+### 5. The vestigial dark override in `globals.css` — the root cause
+
+The Settings bug was a symptom. `globals.css` carried the `create-next-app` default:
+
+```css
+@media (prefers-color-scheme: dark) {
+  :root { --background: #0a0a0a; --foreground: #ededed; }
+}
+```
+
+There is **not a single `dark:` variant anywhere in `src/`** and every page hardcodes a light
+surface, so the app has no dark theme — the block only flipped the two variables, which is
+precisely what fought every page's own colours. Any element that did not paint its own background
+showed near-black; any text that inherited `color` went near-white. Removed, with a comment
+recording why it is deliberately absent. Adding a dark theme means styling every surface, not
+just these two variables.
+
+## Verification
+
+**202 behavioural checks, all passing** (101 server-render + 55 filter/sort/paging logic + 46
+driven in a real browser over the DevTools Protocol), plus **83 unit tests**.
+
+The render and interaction checks import the *real* client components and the real Prisma-free
+libs; only the boundary is substituted (`next/navigation`, `next/link`, `@dnd-kit/core`, and the
+`"use server"` modules, which need Postgres). The browser driver actually clicks and types rather
+than asserting on markup.
+
+Two harness problems were found and fixed while doing this, both worth recording:
+
+- **The harness lived in `/tmp` and `/tmp` was wiped mid-session**, destroying the bundle. It now
+  builds into the workspace, and the disposable Chrome profiles moved to `os.tmpdir()` where
+  scratch belongs. A verification harness that disappears is not a harness.
+- **A check that could not fail.** The first version of the dark-mode regression check asserted
+  on *computed style*. But this harness forces `<meta name="color-scheme" content="light">` and
+  the Tailwind browser build injects its own later `:root`, so the cascade here does not reproduce
+  the real build's — the check passed with the dark block reinstated. It now asserts on the
+  stylesheet itself via the CSSOM, and is mutation-tested: re-adding the block fails it, removing
+  it passes. The first attempt at *that* version matched the phrase inside the explanatory comment
+  and so failed on correct code; matching a real `CSSMediaRule` rather than a substring fixed it.
+
+## What's left
+
+**Unchanged from the previous pass:**
+
+- `npm run predeploy` has still never run — `typecheck`, `lint`, `test`, `build`, the DB drift
+  check and the RLS check. `npm ci` remains blocked in this sandbox.
+- The unit tests ran through a shim, not vitest. Pass/fail is real; vitest's own configuration,
+  coverage reporting and watch mode are not exercised. Run `npm test` once dependencies install
+  to confirm.
+- The PR is not open. The branch is pushed; `gh` is not installed, so open it at
+  `https://github.com/dgexplores/freelance-crm/pull/new/fix/review-p0-hardening`.
+
+**Optional, not done:**
+
+- `import "server-only"` in `src/lib/prisma.ts`. It currently has no guard, so importing any
+  Prisma-touching module from a client component silently bundles Prisma into the browser instead
+  of failing loudly. This has already been a near-miss once.
+- Persisting AI outputs. Briefs, proposals and nudges are generated and discarded.
