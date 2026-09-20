@@ -3,30 +3,30 @@ import { getUser } from "@/lib/session";
 import { billingEnabled, getUsage } from "@/lib/billing";
 import { getUserPrefs } from "@/lib/prefs";
 import { SettingsClient } from "./settings-client";
+import { SettingsSkeleton } from "@/components/skeletons";
+import { Suspense } from "react";
 
 export const metadata = { title: "Settings | Inbox CRM" };
 
-// Per-user data — never prerender at build time (needs request DB access).
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
-  const user = await getUser();
-  if (!user) return null;
-
-  const userData = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      email: true,
-      name: true,
-      rateCard: true,
-      gmailSyncStartedAt: true,
-    },
-  });
-  const usage = await getUsage(user.id);
-  const prefs = await getUserPrefs(user.id);
-  const gmailConnected = await prisma.account.count({
-    where: { userId: user.id, providerId: "google" },
-  });
+async function SettingsContent({ userId }: { userId: string }) {
+  const [userData, usage, prefs, gmailConnected] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        email: true,
+        name: true,
+        rateCard: true,
+        gmailSyncStartedAt: true,
+      },
+    }),
+    getUsage(userId),
+    getUserPrefs(userId),
+    prisma.account.count({
+      where: { userId, providerId: "google" },
+    }),
+  ]);
 
   return (
     <SettingsClient
@@ -39,5 +39,16 @@ export default async function SettingsPage() {
       gmailConnected={gmailConnected > 0}
       billing={{ ...usage, enabled: billingEnabled() }}
     />
+  );
+}
+
+export default async function SettingsPage() {
+  const user = await getUser();
+  if (!user) return null;
+
+  return (
+    <Suspense fallback={<SettingsSkeleton />}>
+      <SettingsContent userId={user.id} />
+    </Suspense>
   );
 }

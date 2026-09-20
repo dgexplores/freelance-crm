@@ -1,19 +1,15 @@
 import { getUser } from "@/lib/session";
 import { BoardClient } from "@/app/board/board-client";
 import { loadBoardData } from "@/app/board/board-data";
+import { BoardSkeleton } from "@/components/skeletons";
+import { Suspense } from "react";
 
 export const metadata = { title: "Pipeline | Inbox CRM" };
 
-// Per-user data — never prerender at build time (needs request DB access).
 export const dynamic = "force-dynamic";
 
-export default async function BoardPage() {
-  const user = await getUser();
-  if (!user) return null; // middleware handles redirect
-
-  // Bounded: a stalled DB rejects to error.tsx (retry) instead of holding
-  // Suspense open until the platform closes the stream (React #412).
-  const data = await loadBoardData(user.id);
+async function BoardContent({ userId }: { userId: string }) {
+  const data = await loadBoardData(userId);
   const { deals, userData, factCount, staleDeals, staleDays } = data;
 
   const serializable = deals.map((deal) => ({
@@ -48,5 +44,16 @@ export default async function BoardPage() {
       staleCount={staleDeals.length}
       staleDays={staleDays}
     />
+  );
+}
+
+export default async function BoardPage() {
+  const user = await getUser();
+  if (!user) return null;
+
+  return (
+    <Suspense fallback={<BoardSkeleton />}>
+      <BoardContent userId={user.id} />
+    </Suspense>
   );
 }

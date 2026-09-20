@@ -2,16 +2,16 @@ import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { DealDetailClient } from "./deal-detail-client";
+import { DealDetailSkeleton } from "@/components/skeletons";
+import { Suspense } from "react";
 
 export const metadata = { title: "Deal | Inbox CRM" };
 
-export default async function DealDetailPage({ params }: { params: Promise<{ dealId: string }> }) {
-  const user = await getUser();
-  if (!user) return null;
-  const { dealId } = await params;
+export const dynamic = "force-dynamic";
 
+async function DealContent({ userId, dealId }: { userId: string; dealId: string }) {
   const deal = await prisma.deal.findFirst({
-    where: { id: dealId, userId: user.id },
+    where: { id: dealId, userId },
     include: {
       contact: {
         include: {
@@ -59,7 +59,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ dea
   if (!deal) notFound();
 
   const userData = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: userId },
     select: { name: true, email: true, rateCard: true },
   });
 
@@ -117,5 +117,17 @@ export default async function DealDetailPage({ params }: { params: Promise<{ dea
       userEmail={userData?.email ?? ""}
       hasRateCard={!!userData?.rateCard}
     />
+  );
+}
+
+export default async function DealDetailPage({ params }: { params: Promise<{ dealId: string }> }) {
+  const user = await getUser();
+  if (!user) return null;
+  const { dealId } = await params;
+
+  return (
+    <Suspense fallback={<DealDetailSkeleton />}>
+      <DealContent userId={user.id} dealId={dealId} />
+    </Suspense>
   );
 }

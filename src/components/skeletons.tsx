@@ -98,3 +98,26 @@ export function PageSkeleton() {
     </div>
   );
 }
+
+export function DealDetailSkeleton() {
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-2">
+        <div className="skeleton h-8 w-64 rounded" />
+        <div className="skeleton h-4 w-48 rounded" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="skeleton h-48 rounded-xl p-6" />
+          <div className="skeleton h-48 rounded-xl p-6" />
+          <div className="skeleton h-48 rounded-xl p-6" />
+          <div className="skeleton h-48 rounded-xl p-6" />
+        </div>
+        <div className="space-y-6">
+          <div className="skeleton h-48 rounded-xl p-6" />
+          <div className="skeleton h-48 rounded-xl p-6" />
+        </div>
+      </div>
+    </div>
+  );
+}
