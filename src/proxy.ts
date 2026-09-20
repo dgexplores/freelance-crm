@@ -7,6 +7,11 @@ import { NextResponse, type NextRequest } from "next/server";
  * so a forged cookie gets pages that fail their data loads, not data.
  */
 export function proxy(request: NextRequest) {
+  // Skip during build/prerender - no request context available
+  if (process.env["NODE_ENV"] !== "production" && process.env["VERCEL"] !== "1") {
+    return NextResponse.next();
+  }
+  
   // Demo mode: skip sign-in gate when explicitly enabled (see src/lib/session.ts).
   if (process.env["DEV_BYPASS_AUTH"] === "true") {
     return NextResponse.next();
