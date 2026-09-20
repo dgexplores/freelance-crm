@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import { Nav } from "@/components/nav";
+import { ViewTransitionProvider } from "@/components/view-transition-provider";
+import { RouteLoader } from "@/components/route-loader";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,16 +30,22 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} h-full antialiased`}>
       <head>
         <link
           href="https://api.fontshare.com/v2/css?f[]=satoshi@500,700,900&display=swap"
           rel="stylesheet"
         />
+        <meta name="view-transition" content="same-origin" />
       </head>
       <body className="min-h-full flex flex-col">
-        <Nav />
-        <main className="flex-1">{children}</main>
+        <ViewTransitionProvider>
+          <RouteLoader />
+          <Nav />
+          <main className="flex-1" style={{ viewTransitionName: "main-content" }}>
+            {children}
+          </main>
+        </ViewTransitionProvider>
       </body>
     </html>
   );

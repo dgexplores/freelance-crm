@@ -1,4 +1,4 @@
-import { BoardSkeleton } from "@/components/skeleton";
+import { BoardSkeleton } from "@/components/skeletons";
 
 export default function BoardLoading() {
   return <BoardSkeleton />;

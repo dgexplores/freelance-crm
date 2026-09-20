@@ -18,6 +18,7 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { moveDealAction, importGmailAction } from "@/app/board/actions";
+import { PrefetchLink } from "@/components/prefetch-link";
 
 type DealCard = {
   id: string;
@@ -246,20 +247,23 @@ function DraggableDealCard({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
+  const viewTransitionName = `deal-${deal.id}`;
+
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ ...style, animationDelay: `${Math.min(index * 40, 320)}ms` }}
+      style={{ ...style, animationDelay: `${Math.min(index * 40, 320)}ms`, viewTransitionName }}
       className={`card-enter ${isDragging ? "z-20 opacity-60" : ""}`}
     >
-      <Link
+      <PrefetchLink
         href={`/board/${deal.id}`}
+        data-view-transition
         className="block touch-none rounded-lg transition-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       >
         <CardFace deal={deal} />
-      </Link>
+      </PrefetchLink>
     </div>
   );
 }
@@ -438,7 +442,7 @@ export function BoardClient(props: {
 
   return (
     <div className="min-h-screen bg-paper">
-      <div className="mx-auto max-w-7xl px-6 pb-4 pt-20">
+      <div className="mx-auto max-w-7xl px-6 pb-4 pt-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="font-display text-xl font-bold tracking-tight text-ink">Pipeline</h1>

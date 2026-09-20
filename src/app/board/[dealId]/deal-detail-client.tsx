@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { PrefetchLink } from "@/components/prefetch-link";
 
 type Deal = {
   id: string;
@@ -212,48 +213,7 @@ export function DealDetailClient(props: {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 pt-14">
-      <header className="border-b border-zinc-200 bg-white sticky top-14 z-10">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-3">
-          <div className="flex items-center gap-3">
-            <Link href="/board" className="text-zinc-500 hover:text-zinc-700">
-              ← Back
-            </Link>
-            <div>
-              <h1 className="text-lg font-semibold text-zinc-900">{deal.title}</h1>
-              <p className="text-xs text-zinc-500">{props.userEmail}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[deal.stage as keyof typeof STAGE_COLORS] ?? STAGE_COLORS["INBOX"]}`}>
-              {deal.stage}
-            </span>
-          </div>
-        </div>
-        <div className="mx-auto max-w-7xl px-6 pb-3 border-b border-zinc-200">
-          <nav className="flex gap-1 overflow-x-auto">
-            {[
-              { id: "overview", label: "Overview" },
-              { id: "emails", label: "Emails", count: deal.contact.emails.length },
-              { id: "facts", label: "Facts", count: deal.contact.facts.length },
-              { id: "tasks", label: "Tasks", count: deal.tasks.length },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? "bg-white text-zinc-900 border-b-2 border-zinc-900"
-                    : "text-zinc-500 hover:text-zinc-700"
-                }`}
-              >
-                {tab.label} {tab.count !== undefined && <span className="ml-1 text-xs text-zinc-400">({tab.count})</span>}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-zinc-50" style={{ viewTransitionName: "deal-detail" }}>
       <main className="mx-auto max-w-7xl px-6 py-6">
         {error && (
           <div className="mb-6 rounded-md bg-rose-50 px-4 py-3 text-sm text-rose-700 flex items-center justify-between">
@@ -400,7 +360,7 @@ export function DealDetailClient(props: {
                 </div>
                 {!props.hasRateCard && (
                   <p className="mt-4 text-xs text-zinc-500">
-                    AI actions require a rate card. <Link href="/settings" className="underline">Add one in Settings</Link>.
+                    AI actions require a rate card. <PrefetchLink href="/settings" data-view-transition className="underline">Add one in Settings</PrefetchLink>.
                   </p>
                 )}
               </section>

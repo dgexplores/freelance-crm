@@ -3,6 +3,7 @@ import { RiseIn, ScrubWords, ScaleMedia } from "@/components/landing/motion";
 import { HowAccordion } from "@/components/landing/accordion";
 import { Testimonials } from "@/components/landing/testimonials";
 import { Button } from "@/components/ui/button";
+import { PrefetchLink } from "@/components/prefetch-link";
 
 export const metadata = {
   title: "Inbox CRM — your inbox is your pipeline",
@@ -342,8 +343,8 @@ export default function Home() {
           <footer className="mx-auto mt-28 flex w-full max-w-7xl flex-col items-center justify-between gap-6 border-t border-white/10 pt-8 text-sm text-zinc-500 sm:flex-row">
             <span className="font-display font-bold text-white">Inbox CRM</span>
             <div className="flex items-center gap-6">
-              <Link href="/board" className="transition-colors hover:text-white">Pipeline</Link>
-              <Link href="/settings" className="transition-colors hover:text-white">Settings</Link>
+              <PrefetchLink href="/board" data-view-transition className="transition-colors hover:text-white">Pipeline</PrefetchLink>
+              <PrefetchLink href="/settings" data-view-transition className="transition-colors hover:text-white">Settings</PrefetchLink>
               <Link href="/privacy" className="transition-colors hover:text-white">Privacy</Link>
               <Link href="/terms" className="transition-colors hover:text-white">Terms</Link>
             </div>

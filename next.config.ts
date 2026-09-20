@@ -9,6 +9,30 @@ const nextConfig: NextConfig = {
   // Standalone output powers the Dockerfile. Vercel manages its own output
   // format — forcing standalone there breaks NFT tracing.
   ...(process.env["VERCEL"] ? {} : { output: "standalone" as const }),
+  
+  // Performance optimizations
+  compress: true,
+  poweredByHeader: false,
+  generateEtags: true,
+  
+  // Image optimization
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 31536000,
+    remotePatterns: [
+      { hostname: "picsum.photos" },
+      { hostname: "lh3.googleusercontent.com" },
+    ],
+  },
+  
+  // Experimental features for better performance
+  experimental: {
+    optimizePackageImports: ["framer-motion", "lucide-react", "@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
+  },
+  
   async headers() {
     return [
       {
@@ -36,6 +60,19 @@ const nextConfig: NextConfig = {
         source: "/api/health",
         headers: [
           { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+        ],
+      },
+      // Cache static assets aggressively
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      {
+        source: "/fonts/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],
       },
     ];
