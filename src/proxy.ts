@@ -7,8 +7,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * so a forged cookie gets pages that fail their data loads, not data.
  */
 export function proxy(request: NextRequest) {
-  // Skip during build/prerender - no request context available
-  if (process.env["NODE_ENV"] !== "production" && process.env["VERCEL"] !== "1") {
+  // Skip during build/prerender
+  if (process.env["NODE_ENV"] !== "production") {
     return NextResponse.next();
   }
   
@@ -18,6 +18,10 @@ export function proxy(request: NextRequest) {
   }
   const hasSession = Boolean(getSessionCookie(request));
   if (!hasSession) {
+    // Avoid redirect loop: don't redirect if already going to sign-in
+    if (request.nextUrl.pathname.startsWith("/sign-in")) {
+      return NextResponse.next();
+    }
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
   return NextResponse.next();
