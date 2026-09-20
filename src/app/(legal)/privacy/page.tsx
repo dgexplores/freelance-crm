@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   description: "How Inbox CRM handles your data.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">

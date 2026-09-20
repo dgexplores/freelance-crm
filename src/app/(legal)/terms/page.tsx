@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   description: "Terms for using Inbox CRM.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
