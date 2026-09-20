@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
-import { notFound } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { DealDetailClient } from "./deal-detail-client";
 import { DealDetailSkeleton } from "@/components/skeletons";
 import { Suspense } from "react";
@@ -122,7 +122,7 @@ async function DealContent({ userId, dealId }: { userId: string; dealId: string 
 
 export default async function DealDetailPage({ params }: { params: Promise<{ dealId: string }> }) {
   const user = await getUser();
-  if (!user) return null;
+  if (!user) redirect("/sign-in");
   const { dealId } = await params;
 
   return (

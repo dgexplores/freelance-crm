@@ -1,4 +1,5 @@
 import { getUser } from "@/lib/session";
+import { redirect } from "next/navigation";
 import { BoardClient } from "@/app/board/board-client";
 import { loadBoardData } from "@/app/board/board-data";
 import { BoardSkeleton } from "@/components/skeletons";
@@ -49,7 +50,7 @@ async function BoardContent({ userId }: { userId: string }) {
 
 export default async function BoardPage() {
   const user = await getUser();
-  if (!user) return null;
+  if (!user) redirect("/sign-in");
 
   return (
     <Suspense fallback={<BoardSkeleton />}>

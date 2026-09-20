@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/session";
+import { redirect } from "next/navigation";
 import { billingEnabled, getUsage } from "@/lib/billing";
 import { getUserPrefs } from "@/lib/prefs";
 import { SettingsClient } from "./settings-client";
@@ -44,7 +45,7 @@ async function SettingsContent({ userId }: { userId: string }) {
 
 export default async function SettingsPage() {
   const user = await getUser();
-  if (!user) return null;
+  if (!user) redirect("/sign-in");
 
   return (
     <Suspense fallback={<SettingsSkeleton />}>
