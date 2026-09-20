@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { type ReactNode, useRef, useEffect } from "react";
 
 type PrefetchLinkProps = {
@@ -8,6 +9,11 @@ type PrefetchLinkProps = {
   children: ReactNode;
   className?: string;
   prefetch?: boolean;
+  transitionName?: string;
+  transitionEnter?: string;
+  transitionExit?: string;
+  transitionShare?: string;
+  transitionDefault?: "auto" | "none";
 } & Omit<React.ComponentProps<typeof Link>, "href" | "children">;
 
 export function PrefetchLink({
@@ -15,6 +21,11 @@ export function PrefetchLink({
   children,
   className = "",
   prefetch = true,
+  transitionName,
+  transitionEnter,
+  transitionExit,
+  transitionShare,
+  transitionDefault = "none",
   ...props
 }: PrefetchLinkProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
@@ -25,7 +36,6 @@ export function PrefetchLink({
     if (!link) return;
 
     const handleMouseEnter = () => {
-      // Next.js Link component has prefetch method on the underlying anchor
       (link as HTMLAnchorElement & { prefetch?: () => void }).prefetch?.();
     };
 
@@ -33,14 +43,26 @@ export function PrefetchLink({
     return () => link.removeEventListener("mouseenter", handleMouseEnter);
   }, [prefetch]);
 
-  return (
-    <Link
-      ref={linkRef}
-      href={href}
-      className={className}
-      {...props}
-    >
-      {children}
-    </Link>
-  );
+  const linkProps = {
+    ref: linkRef,
+    href,
+    className,
+    ...props,
+  };
+
+  if (transitionName) {
+    return (
+      <ViewTransition
+        name={transitionName}
+        enter={transitionEnter}
+        exit={transitionExit}
+        share={transitionShare}
+        default={transitionDefault}
+      >
+        <Link {...linkProps}>{children}</Link>
+      </ViewTransition>
+    );
+  }
+
+  return <Link {...linkProps}>{children}</Link>;
 }

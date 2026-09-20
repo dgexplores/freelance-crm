@@ -3,11 +3,24 @@
 import { motion, useReducedMotion, type MotionProps } from "framer-motion";
 import { type ReactNode } from "react";
 
+/* Motion tokens mapped from transitions-dev root CSS */
 export const spring = {
-  default: { type: "spring" as const, bounce: 0, duration: 0.4 },
-  snappy: { type: "spring" as const, bounce: 0, duration: 0.25 },
+  micro: { type: "spring" as const, bounce: 0, duration: 0.08 },
+  quick: { type: "spring" as const, bounce: 0, duration: 0.15 },
+  fast: { type: "spring" as const, bounce: 0, duration: 0.25 },
+  default: { type: "spring" as const, bounce: 0, duration: 0.35 },
+  medium: { type: "spring" as const, bounce: 0, duration: 0.4 },
+  slow: { type: "spring" as const, bounce: 0, duration: 0.5 },
   momentum: { type: "spring" as const, bounce: 0.2, duration: 0.4 },
-  settle: { type: "spring" as const, bounce: 0, duration: 0.5 },
+} as const;
+
+export const easing = {
+  smoothOut: [0.22, 1, 0.36, 1],
+  inOut: "ease-in-out",
+  out: "ease-out",
+  linear: "linear",
+  bounce: [0.34, 1.36, 0.64, 1],
+  bounceStrong: [0.34, 3.85, 0.64, 1],
 } as const;
 
 export function reducedMotionVariants(base: MotionProps["animate"]) {
@@ -33,8 +46,9 @@ export function RiseIn({
       transition={{
         type: "spring",
         bounce: 0,
-        duration: prefersReduced ? 0.2 : 0.6,
+        duration: prefersReduced ? 0.15 : 0.35,
         delay,
+        ease: easing.smoothOut,
       }}
       style={{ willChange: "transform, opacity" }}
     >
@@ -63,7 +77,13 @@ export function ScrubWords({
           initial={{ opacity: 0.12 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true, margin: "-20%" }}
-          transition={{ type: "spring", bounce: 0, duration: 0.4, delay: i * 0.04 }}
+          transition={{
+            type: "spring",
+            bounce: 0,
+            duration: 0.35,
+            delay: i * 0.04,
+            ease: easing.smoothOut,
+          }}
         >
           {w}
           {i < words.length - 1 ? "\u00A0" : ""}
@@ -85,7 +105,12 @@ export function ScaleMedia({
       initial={prefersReduced ? { opacity: 0 } : { scale: 0.82, opacity: 0.4 }}
       whileInView={prefersReduced ? { opacity: 1 } : { scale: 1, opacity: 1 }}
       viewport={{ once: true, margin: "-10%" }}
-      transition={{ type: "spring", bounce: 0, duration: prefersReduced ? 0.2 : 0.7 }}
+      transition={{
+        type: "spring",
+        bounce: 0,
+        duration: prefersReduced ? 0.15 : 0.5,
+        ease: easing.smoothOut,
+      }}
       style={{ willChange: "transform, opacity" }}
     >
       {children}
@@ -98,4 +123,38 @@ export function PinWrap({
   className = "",
 }: { children: ReactNode; className?: string }) {
   return <div className={className}>{children}</div>;
+}
+
+/* Skeleton reveal with proper motion tokens */
+export function SkeletonReveal({
+  children,
+  className = "",
+  isLoading,
+}: { children: ReactNode; className?: string; isLoading: boolean }) {
+  const prefersReduced = useReducedMotion();
+
+  return (
+    <motion.div className={className}>
+      {isLoading ? (
+        <motion.div
+          className="skeleton"
+          animate={prefersReduced ? {} : { backgroundPosition: ["200% 0", "-200% 0"] }}
+          transition={{ duration: 1.5, ease: easing.linear, repeat: Infinity }}
+          style={{ backgroundSize: "200% 100%" }}
+        />
+      ) : (
+        <motion.div
+          initial={prefersReduced ? { opacity: 0 } : { opacity: 0, filter: "blur(4px)" }}
+          animate={{ opacity: 1, filter: "blur(0px)" }}
+          transition={{
+            duration: prefersReduced ? 0.15 : 0.35,
+            ease: easing.smoothOut,
+          }}
+          style={{ willChange: "opacity, filter" }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </motion.div>
+  );
 }

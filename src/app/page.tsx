@@ -75,16 +75,16 @@ export default function Home() {
           </RiseIn>
           <RiseIn delay={0.2}>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-              <Link href="/board">
+              <PrefetchLink href="/board" transitionName="cta-button" transitionEnter="fade-in" transitionExit="fade-out" transitionShare="morph">
                 <Button variant="cta" asChild>
                   Open the board
                 </Button>
-              </Link>
-              <Link href="/sign-in">
+              </PrefetchLink>
+              <PrefetchLink href="/sign-in" transitionName="secondary-button" transitionEnter="fade-in" transitionExit="fade-out" transitionShare="morph">
                 <Button variant="secondary" asChild>
                   Connect Gmail
                 </Button>
-              </Link>
+              </PrefetchLink>
             </div>
           </RiseIn>
         </div>
@@ -313,16 +313,16 @@ export default function Home() {
             </RiseIn>
             <RiseIn delay={0.12}>
               <div className="mt-10 flex flex-wrap items-center gap-4">
-                <Link href="/board">
+                <PrefetchLink href="/board" transitionName="cta-button-bottom" transitionEnter="fade-in" transitionExit="fade-out" transitionShare="morph">
                   <Button variant="cta" className="px-10 py-4" asChild>
                     Open the board
                   </Button>
-                </Link>
-                <Link href="/sign-in">
+                </PrefetchLink>
+                <PrefetchLink href="/sign-in" transitionName="secondary-button-bottom" transitionEnter="fade-in" transitionExit="fade-out" transitionShare="morph">
                   <Button variant="secondary" className="px-10 py-4" asChild>
                     Connect Gmail
                   </Button>
-                </Link>
+                </PrefetchLink>
               </div>
             </RiseIn>
           </div>
@@ -343,8 +343,8 @@ export default function Home() {
           <footer className="mx-auto mt-28 flex w-full max-w-7xl flex-col items-center justify-between gap-6 border-t border-white/10 pt-8 text-sm text-zinc-500 sm:flex-row">
             <span className="font-display font-bold text-white">Inbox CRM</span>
             <div className="flex items-center gap-6">
-              <PrefetchLink href="/board" data-view-transition className="transition-colors hover:text-white">Pipeline</PrefetchLink>
-              <PrefetchLink href="/settings" data-view-transition className="transition-colors hover:text-white">Settings</PrefetchLink>
+              <PrefetchLink href="/board" transitionName="footer-pipeline" className="transition-colors hover:text-white">Pipeline</PrefetchLink>
+              <PrefetchLink href="/settings" transitionName="footer-settings" className="transition-colors hover:text-white">Settings</PrefetchLink>
               <Link href="/privacy" className="transition-colors hover:text-white">Privacy</Link>
               <Link href="/terms" className="transition-colors hover:text-white">Terms</Link>
             </div>

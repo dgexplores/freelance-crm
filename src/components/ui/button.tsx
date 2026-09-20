@@ -1,12 +1,12 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { type ButtonHTMLAttributes, forwardRef } from "react";
-import { spring } from "@/components/landing/motion";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "cta";
   asChild?: boolean;
+  disableScale?: boolean; // disable scale on press/hover
 };
 
 const variants = {
@@ -18,20 +18,47 @@ const variants = {
 
 const baseClass = "inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-sm font-semibold transition-colors";
 
+// Motion tokens from transitions-dev
+const TAP_SCALE = 0.96;
+const HOVER_SCALE = 1.02;
+const SPRING_FAST = { type: "spring" as const, bounce: 0, duration: 0.25 };
+
+// Helper to omit problematic event handlers that conflict with Framer Motion
+function cleanProps<T extends Record<string, unknown>>(props: T) {
+  const {
+    onDrag, onDragStart, onDragEnd, onDragEnter, onDragLeave, onDragOver, onDrop,
+    onAnimationStart, onAnimationEnd, onAnimationIteration,
+    onTransitionStart, onTransitionEnd, onTransitionCancel,
+    ...rest
+  } = props;
+  return rest;
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className = "", variant = "primary", asChild = false, children, ...props }, ref) => {
-    const motionProps = { ...props } as Record<string, unknown>;
+  ({ className = "", variant = "primary", asChild = false, disableScale = false, children, ...props }, ref) => {
+    const prefersReduced = useReducedMotion();
+
+    const tapScale = disableScale || prefersReduced ? 1 : TAP_SCALE;
+    const hoverScale = prefersReduced ? 1 : HOVER_SCALE;
+    const transition = prefersReduced ? { duration: 0.15, ease: "easeOut" as const } : SPRING_FAST;
+
+    const sharedProps = {
+      className: `${baseClass} ${variants[variant]} ${className}`,
+      whileTap: { scale: tapScale },
+      whileHover: { scale: hoverScale },
+      transition: prefersReduced ? { duration: 0.15, ease: "easeOut" as const } : SPRING_FAST,
+      style: { willChange: "transform" },
+    } as const;
+
+    // Clean props to avoid Framer Motion type conflicts
+    const cleanChildProps = cleanProps(props);
 
     if (asChild) {
       return (
         <motion.span
           ref={ref as React.RefObject<HTMLSpanElement>}
-          className={`${baseClass} ${variants[variant]} ${className}`}
-          whileTap={{ scale: 0.96 }}
-          whileHover={{ scale: 1.02 }}
-          transition={spring.default}
-          style={{ willChange: "transform" }}
-          {...motionProps}
+          {...sharedProps}
+          {...cleanChildProps}
         >
           {children}
         </motion.span>
@@ -41,12 +68,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref}
-        className={`${baseClass} ${variants[variant]} ${className}`}
-        whileTap={{ scale: 0.96 }}
-        whileHover={{ scale: 1.02 }}
-        transition={spring.default}
-        style={{ willChange: "transform" }}
-        {...motionProps}
+        {...sharedProps}
+        {...cleanChildProps}
       >
         {children}
       </motion.button>
