@@ -23,14 +23,6 @@ export const easing = {
   bounceStrong: [0.34, 3.85, 0.64, 1],
 } as const;
 
-export function reducedMotionVariants(base: MotionProps["animate"]) {
-  const prefersReduced = useReducedMotion();
-  if (prefersReduced) {
-    return { ...(base as object), transition: { duration: 0.15, ease: "easeOut" } };
-  }
-  return base;
-}
-
 export function RiseIn({
   children,
   className = "",
