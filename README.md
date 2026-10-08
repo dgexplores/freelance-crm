@@ -1,5 +1,7 @@
 # freelance-crm
 
+[![CI](https://github.com/dgexplores/freelance-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/dgexplores/freelance-crm/actions/workflows/ci.yml)
+
 *Your deals manage themselves.*
 
 ---
@@ -7,6 +9,16 @@
 ## TL;DR
 
 A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (read-only), turns inbound threads into a deal board with evidence, and writes your pre-call briefs, proposals, and follow-ups from your rate card. Zero data entry. No guessing.
+
+## 60-second brief
+
+**What:** A pipeline CRM for solo freelancers — read-only Gmail sync turns inbound threads into an evidence-backed deal board, and your rate card powers AI pre-call briefs, proposals, and follow-ups.
+
+**Stack:** Next.js 16 + React 19 + TypeScript, PostgreSQL 17 + Prisma, Better Auth (Google OAuth), Gmail API (read-only), Google Gemini, Tailwind CSS v4, Sentry, Vercel cron.
+
+**Structure:** [`src/app/board/`](src/app/board/) pipeline board and deal detail · [`src/app/api/`](src/app/api/) AI, auth, cron, and health endpoints · [`src/lib/`](src/lib/) Gmail client, pipeline logic, and AI prompts · [`prisma/`](prisma/) schema · [`SETUP.md`](SETUP.md) OAuth setup · [`FREELANCE-CRM-SESSION-LOG.md`](./FREELANCE-CRM-SESSION-LOG.md) delivery record.
+
+**Live demo (verified):** <https://freelance-crm-xi.vercel.app>
 
 ---
 
@@ -18,7 +30,7 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 - **Security hardening** — IDOR closed (session + owner scoping on every AI route, locked by a regression test), rate limiting on AI endpoints, typed error hierarchy, sanitized errors, Gemini key moved to headers
 - **Reliability** — retry with backoff on Gmail/Gemini failures, atomic per-message DB staging, forward-sync boundary race fixed, DB hot-path indexes, session-less cron scheduler that actually works
 - **Product UX** — drag-and-drop kanban with optimistic moves, streaming AI output (shimmer → typewriter → result card), motion design with `prefers-reduced-motion` support
-- **Quality gates** — 24 unit tests + 10 Postgres integration tests run in CI on every push; lint + typecheck + production build all green
+- **Quality gates** — 31 unit tests + 10 Postgres integration tests run in CI on every push; lint + typecheck + production build all green
 - **Ops** — Dockerfile + prod compose stack, `vercel.json` cron, backup + restore scripts, privacy policy + terms pages
 - **Infrastructure** — Supabase Postgres provisioned and migrated; Vercel project deployed with auth/cron/DB secrets wired
 
@@ -297,7 +309,7 @@ npm run build        # Production build
 npm run start        # Production server
 npm run lint         # ESLint
 npm run typecheck    # TypeScript strict check
-npm run test         # Unit tests (24 tests)
+npm run test         # Unit tests (31 tests)
 npm run test:watch   # Watch mode
 npm run db:push      # Push schema to DB
 npm run db:generate  # Generate Prisma client
