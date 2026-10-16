@@ -23,15 +23,27 @@ const TAP_SCALE = 0.96;
 const HOVER_SCALE = 1.02;
 const SPRING_FAST = { type: "spring" as const, bounce: 0, duration: 0.25 };
 
-// Helper to omit problematic event handlers that conflict with Framer Motion
-function cleanProps<T extends Record<string, unknown>>(props: T) {
-  const {
-    onDrag, onDragStart, onDragEnd, onDragEnter, onDragLeave, onDragOver, onDrop,
-    onAnimationStart, onAnimationEnd, onAnimationIteration,
-    onTransitionStart, onTransitionEnd, onTransitionCancel,
-    ...rest
-  } = props;
-  return rest;
+// Props that conflict with Framer Motion's own handlers — strip before spreading.
+const MOTION_CONFLICT_PROPS = [
+  "onDrag",
+  "onDragStart",
+  "onDragEnd",
+  "onDragEnter",
+  "onDragLeave",
+  "onDragOver",
+  "onDrop",
+  "onAnimationStart",
+  "onAnimationEnd",
+  "onAnimationIteration",
+  "onTransitionStart",
+  "onTransitionEnd",
+  "onTransitionCancel",
+] as const;
+
+function cleanProps<T extends Record<string, unknown>>(props: T): Omit<T, (typeof MOTION_CONFLICT_PROPS)[number]> {
+  const rest = { ...props };
+  for (const key of MOTION_CONFLICT_PROPS) delete rest[key as keyof T];
+  return rest as Omit<T, (typeof MOTION_CONFLICT_PROPS)[number]>;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -40,7 +52,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const tapScale = disableScale || prefersReduced ? 1 : TAP_SCALE;
     const hoverScale = prefersReduced ? 1 : HOVER_SCALE;
-    const transition = prefersReduced ? { duration: 0.15, ease: "easeOut" as const } : SPRING_FAST;
 
     const sharedProps = {
       className: `${baseClass} ${variants[variant]} ${className}`,

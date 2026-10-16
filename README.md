@@ -33,6 +33,7 @@ A pipeline CRM for **solo freelancers and consultants** that reads your Gmail (r
 - **Quality gates** — 31 unit tests + 10 Postgres integration tests run in CI on every push; lint + typecheck + production build all green
 - **Ops** — Dockerfile + prod compose stack, `vercel.json` cron, backup + restore scripts, privacy policy + terms pages
 - **Infrastructure** — Supabase Postgres provisioned and migrated; Vercel project deployed with auth/cron/DB secrets wired
+- **Cleanup (2026-10-16)** — removed dead `route-loader` + `view-transition-provider` (zero references), simplified `Button` motion-conflict strip with correct `Omit` typing, dropped unused `MotionProps` import; typecheck clean, lint 0 errors
 
 ### Left
 | Item | Who |

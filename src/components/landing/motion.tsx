@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion, type MotionProps } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { type ReactNode } from "react";
 
 /* Motion tokens mapped from transitions-dev root CSS */
